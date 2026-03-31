@@ -40,6 +40,15 @@ def get_custom_fields():
 				"read_only": 1,
 				"no_copy": 1,
 			},
+			{
+				"fieldname": "custom_outstanding_after_down_payments",
+				"label": "Outstanding After Down Payments",
+				"fieldtype": "Currency",
+				"insert_after": "custom_down_payments",
+				"depends_on": "eval: doc.custom_invoice_type == 'Final Invoice'",
+				"read_only": 1,
+				"no_copy": 1,
+			},
 		],
 		"Sales Order": [
 			{

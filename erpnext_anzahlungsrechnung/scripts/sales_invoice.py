@@ -5,10 +5,8 @@ from frappe.utils.formatters import format_value
 
 def before_validate(doc, event):
 	validate_sales_order_consistency(doc)
-
-
-def before_submit(doc, event):
 	append_down_payment_invoice_to_final_invoice(doc)
+	set_amount_after_down_payments(doc)
 
 
 def validate_sales_order_consistency(doc):
@@ -263,6 +261,7 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		.orderby(sales_invoice.posting_date)
 		.orderby(sales_invoice.creation)
 	).run(as_dict=True)
+	doc.set("custom_down_payments", [])
 	for down_payment_invoice in down_payment_invoices:
 		doc.append(
 			"custom_down_payments",
@@ -273,3 +272,10 @@ def append_down_payment_invoice_to_final_invoice(doc):
 				"grand_total": down_payment_invoice.grand_total,
 			},
 		)
+
+
+def set_amount_after_down_payments(doc):
+	if doc.custom_invoice_type != "Final Invoice":
+		return
+
+	doc.custom_outstanding_after_down_payments = doc.grand_total
