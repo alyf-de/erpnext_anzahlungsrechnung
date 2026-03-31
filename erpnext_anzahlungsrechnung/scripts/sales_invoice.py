@@ -7,6 +7,10 @@ def before_validate(doc, event):
 	validate_sales_order_consistency(doc)
 
 
+def before_submit(doc, event):
+	append_down_payment_invoice_to_final_invoice(doc)
+
+
 def validate_sales_order_consistency(doc):
 	"""Orchestrate which validations run based on the invoice type and return against."""
 	if not doc.return_against:
@@ -233,4 +237,39 @@ def _validate_sum_of_invoices_against_sales_order(doc):
 				format_value(invoiced_amount, "Currency", doc.currency),
 				format_value(sales_order_amount, "Currency", doc.currency),
 			)
+		)
+
+
+def append_down_payment_invoice_to_final_invoice(doc):
+	if doc.custom_invoice_type != "Final Invoice":
+		return
+
+	from frappe.query_builder import DocType
+
+	sales_invoice = DocType("Sales Invoice")
+	sales_invoice_item = DocType("Sales Invoice Item")
+
+	down_payment_invoices = (
+		frappe.qb.from_(sales_invoice)
+		.inner_join(sales_invoice_item)
+		.on(sales_invoice_item.parent == sales_invoice.name)
+		.select(sales_invoice.name, sales_invoice.posting_date, sales_invoice.total, sales_invoice.grand_total)
+		.where(
+			(sales_invoice_item.sales_order == doc.items[0].sales_order)
+			& (sales_invoice.docstatus == 1)
+			& (sales_invoice.custom_invoice_type == "Down Payment Invoice")
+		)
+		.distinct()
+		.orderby(sales_invoice.posting_date)
+		.orderby(sales_invoice.creation)
+	).run(as_dict=True)
+	for down_payment_invoice in down_payment_invoices:
+		doc.append(
+			"custom_down_payments",
+			{
+				"invoice_no": down_payment_invoice.name,
+				"date": down_payment_invoice.posting_date,
+				"net_total": down_payment_invoice.total,
+				"grand_total": down_payment_invoice.grand_total,
+			},
 		)

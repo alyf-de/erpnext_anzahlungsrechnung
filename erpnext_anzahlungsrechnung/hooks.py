@@ -135,6 +135,8 @@ after_install = "erpnext_anzahlungsrechnung.install.after_install"
 doc_events = {
 	"Sales Invoice": {
 		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_validate",
+		"before_submit": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_submit",
+		"before_print": "erpnext_anzahlungsrechnung.scripts.print_and_e_invoice_utils.before_print",
 	},
 	"Sales Order": {
 		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_order.before_validate",
