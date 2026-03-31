@@ -86,7 +86,7 @@ app_license = "mit"
 # ------------
 
 # before_install = "erpnext_anzahlungsrechnung.install.before_install"
-# after_install = "erpnext_anzahlungsrechnung.install.after_install"
+after_install = "erpnext_anzahlungsrechnung.install.after_install"
 
 # Uninstallation
 # ------------
@@ -132,13 +132,15 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_validate",
+	},
+	"Sales Order": {
+		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_order.before_validate",
+		"before_update_after_submit": "erpnext_anzahlungsrechnung.scripts.sales_order.before_update_after_submit",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
