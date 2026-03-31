@@ -14,18 +14,18 @@ def validate_sales_order_consistency(doc):
 
 	if doc.return_against:
 		_ensure_invoice_type_consistency_for_returns(doc.return_against, doc.custom_invoice_type)
-		_avoid_returns_against_finished_partial_invoices(doc)
+		_avoid_returns_against_finished_down_payment_invoices(doc)
 		_validate_updation_of_sales_order_billed_amount(
 			doc.custom_invoice_type, doc.update_billed_amount_in_sales_order
 		)
 
-	if doc.custom_invoice_type in ["Partial Invoice", "Final Invoice"]:
+	if doc.custom_invoice_type in ["Down Payment Invoice", "Final Invoice"]:
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_prevent_position_discounts(doc)
 
-	if doc.custom_invoice_type == "Partial Invoice":
-		_validate_partial_invoice_billing_limits(doc)
+	if doc.custom_invoice_type == "Down Payment Invoice":
+		_validate_down_payment_invoice_billing_limits(doc)
 		_prevent_additional_discounts(doc)
 
 	if doc.custom_invoice_type == "Final Invoice":
@@ -35,7 +35,7 @@ def validate_sales_order_consistency(doc):
 
 def _avoid_invoice_type_inconsistencies(invoice_type, items):
 	"""Ensure linked Sales Orders use the expected invoice type."""
-	billing_mode = "Partial Invoice" if invoice_type == "Final Invoice" else invoice_type
+	billing_mode = "Down Payment Invoice" if invoice_type == "Final Invoice" else invoice_type
 	sales_orders = {item.sales_order for item in items if item.sales_order}
 	for sales_order in sales_orders:
 		sales_order_invoice_type = frappe.db.get_value("Sales Order", sales_order, "custom_invoice_type")
@@ -53,26 +53,26 @@ def _ensure_invoice_type_consistency_for_returns(return_against, invoice_type):
 		frappe.throw(_("The Invoice Type of the Return must match the Invoice Type of the original Invoice."))
 
 
-def _avoid_returns_against_finished_partial_invoices(doc):
-	"""Block returns once a partial-invoice Sales Order is fully billed."""
-	if doc.custom_invoice_type != "Partial Invoice":
+def _avoid_returns_against_finished_down_payment_invoices(doc):
+	"""Block returns once a down-payment-invoice Sales Order is fully billed."""
+	if doc.custom_invoice_type != "Down Payment Invoice":
 		return
 
 	sales_order_per_billed = frappe.db.get_value("Sales Order", doc.items[0].sales_order, "per_billed")
 	if sales_order_per_billed >= 100:
 		frappe.throw(
 			_(
-				"This Partial Invoice has already been fully invoiced. No returns are allowed to avoid inconsistencies with Final Invoice."
+				"This Down Payment Invoice has already been fully invoiced. No returns are allowed to avoid inconsistencies with Final Invoice."
 			)
 		)
 
 
 def _validate_updation_of_sales_order_billed_amount(invoice_type, update_billed_amount):
-	"""Require billed amount updates for partial/final invoice flows."""
-	if invoice_type in ["Partial Invoice", "Final Invoice"] and not update_billed_amount:
+	"""Require billed amount updates for down-payment/final invoice flows."""
+	if invoice_type in ["Down Payment Invoice", "Final Invoice"] and not update_billed_amount:
 		frappe.throw(
 			_(
-				"The Sales Order Billed Amount must be updated if it's a Partial Invoice or Final Invoice. Please activate the checkbox."
+				"The Sales Order Billed Amount must be updated if it's a Down Payment Invoice or Final Invoice. Please activate the checkbox."
 			)
 		)
 
@@ -84,13 +84,13 @@ def _ensure_sales_order_is_linked(items):
 
 
 def _ensure_only_one_linked_sales_order(items):
-	"""Ensure partial/final invoices reference exactly one Sales Order."""
+	"""Ensure down-payment/final invoices reference exactly one Sales Order."""
 	if len({item.sales_order for item in items}) > 1:
-		frappe.throw(_("Partial Invoices or Final Invoices can only process a single Sales Order."))
+		frappe.throw(_("Down Payment Invoices or Final Invoices can only process a single Sales Order."))
 
 
-def _validate_partial_invoice_billing_limits(doc):
-	"""Prevent partial invoices from overbilling or fully closing all order rows."""
+def _validate_down_payment_invoice_billing_limits(doc):
+	"""Prevent down payment invoices from overbilling or fully closing all order rows."""
 	so_positions = {
 		item["name"]: item
 		for item in frappe.get_all(
@@ -106,7 +106,7 @@ def _validate_partial_invoice_billing_limits(doc):
 	if all(round(so_pos["billed_amt"], 2) >= round(so_pos["amount"], 2) for so_pos in so_positions.values()):
 		frappe.throw(
 			_(
-				"This Partial Invoice tries to complete all positions of the Sales Order. At least one position must remain open."
+				"This Down Payment Invoice tries to complete all positions of the Sales Order. At least one position must remain open."
 			)
 		)
 
@@ -114,7 +114,7 @@ def _validate_partial_invoice_billing_limits(doc):
 		if round(so_pos["billed_amt"], 2) > round(so_pos["amount"], 2):
 			frappe.throw(
 				_(
-					"This Partial Invoice tries to overbill following Sales Order Position:<br><br>#{0} | {1}: {2} | Order Amount: {3}"
+					"This Down Payment Invoice tries to overbill following Sales Order Position:<br><br>#{0} | {1}: {2} | Order Amount: {3}"
 				).format(
 					so_pos["idx"],
 					so_pos["item_code"],
@@ -125,17 +125,17 @@ def _validate_partial_invoice_billing_limits(doc):
 
 
 def _prevent_position_discounts(doc):
-	"""Disallow position discounts on partial or final invoices."""
+	"""Disallow position discounts on down payment or final invoices."""
 	if any(item.discount_percentage for item in doc.items):
-		frappe.throw(_("Position Discounts are not allowed for Partial Invoices or Final Invoices."))
+		frappe.throw(_("Position Discounts are not allowed for Down Payment Invoices or Final Invoices."))
 
 
 def _prevent_additional_discounts(doc):
-	"""Disallow additional discount amount on partial invoices."""
+	"""Disallow additional discount amount on down payment invoices."""
 	if doc.discount_amount:
 		frappe.throw(
 			_(
-				"Additional discounts are not allowed for Partial Invoices. You can add them later to the Final Invoice."
+				"Additional discounts are not allowed for Down Payment Invoices. You can add them later to the Final Invoice."
 			)
 		)
 
@@ -209,7 +209,7 @@ def _validate_sum_of_invoices_against_sales_order(doc):
 	if not invoice_names:
 		frappe.throw(
 			_(
-				"No Invoices found for this Sales Order. You can't create a Final Invoice. Consider using 'normal' Invoices or creating Partial Invoices before creating a Final Invoice."
+				"No Invoices found for this Sales Order. You can't create a Final Invoice. Consider using 'normal' Invoices or creating Down Payment Invoices before creating a Final Invoice."
 			)
 		)
 
