@@ -1,0 +1,193 @@
+@charset "UTF-8";
+
+/* DIN 5008 layout + margins (from erpnext_druckformate, adapted for print format CSS field) */
+.print-format {
+	margin-left: 0mm;
+	margin-right: 0mm;
+	margin-top: 10mm;
+	margin-bottom: 45mm;
+	font-size: 10pt;
+	padding: 0;
+	position: relative;
+}
+
+.print-format #header {
+	/* ( 45 mm - 10 mm margin ) */
+	height: 35mm;
+	/* Overwrite empty header inserted by frappe */
+	margin-top: -10mm;
+	overflow: hidden;
+	position: relative;
+	margin-left: 25mm;
+	margin-right: 20mm;
+}
+
+.print-format .contact-row {
+	position: relative;
+	overflow: hidden;
+	left: 20mm;
+	height: 45mm;
+	/* müsste eigentlich 180mm sein, sieht mit 170 aber besser aus. */
+	width: 170mm;
+}
+
+.print-format #sender {
+	position: relative;
+	font-size: 50%;
+	height: 17.7mm;
+	display: table-cell;
+	vertical-align: middle;
+}
+
+.print-format #sender p {
+	position: absolute;
+	width: 85mm;
+}
+
+.print-format #address {
+	float: left;
+	width: 85mm;
+	padding-left: 5mm;
+}
+
+.print-format #contact {
+	float: right;
+	width: 75mm;
+	margin-top: 5mm;
+}
+
+.print-format #contact td {
+	padding: 1.5px !important;
+}
+
+.print-format #subject {
+	margin-bottom: 2em;
+}
+
+.print-format .din-mark {
+	height: 1pt;
+	background-color: black;
+	position: absolute;
+}
+
+.print-format #faltmarke-1 {
+	/* ( 105 mm - 10 mm margin ) */
+	top: 95mm;
+	width: 12mm;
+}
+
+.print-format #lochmarke {
+	/* ( 148.5 mm - 10 mm margin ) */
+	top: 138.5mm;
+	width: 7mm;
+}
+
+.print-format #faltmarke-2 {
+	/* ( 210 mm - 10 mm margin ) */
+	top: 200mm;
+	width: 12mm;
+}
+
+.print-format #text {
+	margin-top: 8.46mm;
+	margin-left: 25mm;
+	margin-right: 20mm;
+}
+
+.print-format .text-right {
+	text-align: right;
+}
+
+.print-format .text-small {
+	font-size: 8pt;
+}
+
+.print-format .black-border {
+	border-top: solid black 1px;
+	border-bottom: solid black 1px;
+}
+
+.print-format .w-100 {
+	width: 100%;
+}
+
+.print-format table:not(.footer-table) {
+	/* --- Nice page breaks for tables --- */
+	page-break-inside: auto;
+	table-layout: fixed;
+}
+
+.print-format table:not(.footer-table) tr {
+	page-break-inside: avoid;
+	page-break-after: auto;
+}
+
+.print-format table:not(.footer-table) thead {
+	display: table-header-group;
+}
+
+.print-format table:not(.footer-table) thead th {
+	background-color: #eee;
+	font-weight: bold;
+	color: black;
+}
+
+.print-format table:not(.footer-table) tfoot {
+	display: table-row-group;
+}
+
+/* Main invoice items table: collapsed borders so tfoot rules render as single lines */
+.print-format #text > table.w-100 {
+	border-collapse: collapse;
+}
+
+/* Compact totals / footer rows on the main invoice items table */
+.print-format #text > table.w-100 tfoot td {
+	padding: 2px 4px !important;
+}
+
+.print-format #text > table.w-100 tfoot tr.prior-down-payments-header td {
+	padding: 0.65em 4px 2px !important;
+	border-top: 1px solid #000 !important;
+}
+
+.print-format #text > table.w-100 tfoot tr.prior-down-payments-outstanding td {
+	padding: 2px 4px 0.65em !important;
+	border-bottom: 1px solid #000 !important;
+}
+
+.print-format .ql-editor {
+	line-height: 1.42857143;
+	font-family: var(--font-stack, Inter, "Helvetica Neue", Helvetica, Arial, "Open Sans", sans-serif);
+	overflow: hidden;
+}
+
+.print-format .ql-editor p {
+	margin: unset;
+}
+
+.print-format .prior-down-payment-row,
+.print-format .prior-down-payments-header,
+.print-format .prior-down-payments-outstanding {
+	page-break-inside: avoid;
+}
+
+.print-format-footer {
+	margin-left: 25mm;
+	padding-right: 20mm;
+}
+
+#pagenum {
+	text-align: right;
+	margin-right: 20mm;
+	margin-top: 4.23mm;
+	margin-bottom: 4.23mm;
+}
+
+body,
+html {
+	padding: 0;
+	margin: 0;
+	width: 100%;
+	height: 100%;
+}

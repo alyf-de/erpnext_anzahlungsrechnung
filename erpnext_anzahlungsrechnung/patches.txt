@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 execute:from erpnext_anzahlungsrechnung.install import make_custom_fields; make_custom_fields() # 2026-03-31 #4
 execute:from erpnext_anzahlungsrechnung.install import make_property_setters; make_property_setters() # 2026-03-31 #1
+erpnext_anzahlungsrechnung.patches.create_sales_invoice_print_format # 2026-04-04 #5
