@@ -26,71 +26,53 @@
 			</p>
 		</div>
 		{% endif %}
-		{{ doc.customer_name }}<br />
-		{% if contact %}
-		{%- if contact.salutation -%}
-		{{ contact.salutation }}
-		{%- endif %}
-		{%- if contact.salutation in ["Hr.", "Herr"] %}n{% endif %}
-		{{ contact.first_name }} {{ contact.last_name }}<br>
-		{% endif %}
 		{{ doc.address_display or "" }}
 	</div>
 
 	<div id="contact">
 		<table class="w-100 text-small">
 			{% if company.phone_no %}
-			<tr>
-				<td>{{ _("Phone") }}:</td>
-				<td class="text-right">{{ company.phone_no }}</td>
-			</tr>
+				<tr>
+					<td>{{ _("Phone") }}:</td>
+					<td class="text-right">{{ company.phone_no }}</td>
+				</tr>
 			{% endif %}
-
 			{% if company.email %}
-			<tr>
-				<td>{{ _("Email") }}:</td>
-				<td class="text-right">{{ company.email }}</td>
-			</tr>
+				<tr>
+					<td>{{ _("Email") }}:</td>
+					<td class="text-right">{{ company.email }}</td>
+				</tr>
 			{% endif %}
-
-			<tr>
-				<td>{{ _("Date") }}:</td>
-				<td class="text-right">{{ frappe.utils.formatdate(doc.posting_date, "dd.mm.yyyy") }}</td>
-			</tr>
-
-			{% if not doc.is_return %}
-			<tr>
-				<td>{{ _("Payment Due Date") }}:</td>
-				<td class="text-right">{{ frappe.utils.formatdate(doc.due_date, "dd.mm.yyyy") }}</td>
-			</tr>
-			{% endif %}
-
+				<tr>
+					<td>{{ _("Date") }}:</td>
+					<td class="text-right">{{ frappe.utils.formatdate(doc.posting_date, "dd.mm.yyyy") }}</td>
+				</tr>
 			{% if doc.po_no %}
-			<tr>
-				<td>{{ _("Your PO No.") }}:</td>
-				<td class="text-right">{{ doc.po_no }}</td>
-			</tr>
+				<tr>
+					<td>{{ _("Your PO No.") }}:</td>
+					<td class="text-right">{{ doc.po_no }}</td>
+				</tr>
 			{% endif %}
 
 			{% if doc.tax_id %}
-			<tr>
-				<td>{{ _("Your Tax ID") }}:</td>
-				<td class="text-right">{{ doc.tax_id }}</td>
-			</tr>
+				<tr>
+					<td>{{ _("Your Tax ID") }}:</td>
+					<td class="text-right">{{ doc.tax_id }}</td>
+				</tr>
 			{% endif %}
 
 			{% if doc.from_date and doc.to_date %}
-			<tr>
-				<td>{{ _("Performance Period") }}:</td>
-				{# If the year matches (first 4 chars in ISO-string), omit it for from_date #}
-				{% if doc.from_date.year is defined %}
-				{% set date_format = "dd.mm." if doc.from_date.year == doc.to_date.year else "dd.mm.yy" %}
-				{% else %}
-				{% set date_format = "dd.mm." if doc.from_date[:4] == doc.to_date[:4] else "dd.mm.yy" %}
-				{% endif %}
-				<td class="text-right">{{ frappe.utils.formatdate(doc.from_date, date_format) }} - {{
-					frappe.utils.formatdate(doc.to_date, "dd.mm.yyyy") }}</td>
-			</tr>
+				<tr>
+					<td>{{ _("Performance Period") }}:</td>
+					{# If the year matches (first 4 chars in ISO-string), omit it for from_date #}
+					{% if doc.from_date.year is defined %}
+					{% set date_format = "dd.mm." if doc.from_date.year == doc.to_date.year else "dd.mm.yy" %}
+					{% else %}
+					{% set date_format = "dd.mm." if doc.from_date[:4] == doc.to_date[:4] else "dd.mm.yy" %}
+					{% endif %}
+					<td class="text-right">{{ frappe.utils.formatdate(doc.from_date, date_format) }} - {{
+						frappe.utils.formatdate(doc.to_date, "dd.mm.yyyy") }}</td>
+				</tr>
 			{% endif %}
 		</table>
 	</div>
@@ -104,19 +86,19 @@
 <div id="text">
 	<div id="subject">
 		{% if doc.is_return %}
-		<p><strong>{{ _("Correction Invoice") }} {{ doc.name }}</strong></p>
-		<p class="text-small">{{ _("Rectifies invoice {0}").format(doc.return_against) }}</p>
+			<p><strong>{{ _("Correction Invoice") }} {{ doc.name }}</strong></p>
+			<p class="text-small">{{ _("Rectifies invoice {0}").format(doc.return_against) }}</p>
 		{% elif doc.amended_from %}
-		<p><strong>{{ _("Cancellation Invoice") }} {{ doc.name }}</strong></p>
-		<p class="text-small">{{ _("Fully cancels and replaces invoice {0}").format(doc.amended_from) }}</p>
+			<p><strong>{{ _("Cancellation Invoice") }} {{ doc.name }}</strong></p>
+			<p class="text-small">{{ _("Fully cancels and replaces invoice {0}").format(doc.amended_from) }}</p>
 		{% else %}
-		{% if doc.get("custom_invoice_type") == "Down Payment Invoice" %}
-		<p><strong>{{ _("Down Payment Invoice") }} {{ doc.name }}</strong></p>
-		{% elif doc.get("custom_invoice_type") == "Final Invoice" %}
-		<p><strong>{{ _("Final Invoice") }} {{ doc.name }}</strong></p>
-		{% else %}
-		<p><strong>{{ _("Invoice") }} {{ doc.name }}</strong></p>
-		{% endif %}
+			{% if doc.get("custom_invoice_type") == "Down Payment Invoice" %}
+				<p><strong>{{ _("Down Payment Invoice") }} {{ doc.name }}</strong></p>
+			{% elif doc.get("custom_invoice_type") == "Final Invoice" %}
+				<p><strong>{{ _("Final Invoice") }} {{ doc.name }}</strong></p>
+			{% else %}
+				<p><strong>{{ _("Invoice") }} {{ doc.name }}</strong></p>
+			{% endif %}
 		{% endif %}
 	</div>
 
@@ -135,52 +117,52 @@
 		</thead>
 		<tbody>
 			{% for n in doc.items %}
-			<tr>
-				<td>{{ loop.index }}</td>
-				<td><b>{{ _(n.item_name) }}</b></td>
-				<td>{{ _(n.uom) if not print_settings.print_uom_after_quantity else '&nbsp;'}}</td>
-				<td>
-					{{ n.get_formatted("qty") }}
-					{% if print_settings.print_uom_after_quantity %}
-					{{ _(n.uom) }}
-					{% endif %}
-				</td>
-				<td>{{ n.get_formatted("rate") }}</td>
-				<!-- <td>{{ n.get_formatted("discount_amount") }}</td> -->
-				<td class="text-right">{{ n.get_formatted("amount") }}</td>
-			</tr>
-			<tr>
-				<td></td>
-				<td colspan="4">{{ n.description }}</td>
-				<td></td>
-			</tr>
+				<tr>
+					<td>{{ loop.index }}</td>
+					<td><b>{{ _(n.item_name) }}</b></td>
+					<td>{{ _(n.uom) if not print_settings.print_uom_after_quantity else '&nbsp;'}}</td>
+					<td>
+						{{ n.get_formatted("qty") }}
+						{% if print_settings.print_uom_after_quantity %}
+						{{ _(n.uom) }}
+						{% endif %}
+					</td>
+					<td>{{ n.get_formatted("rate") }}</td>
+					<!-- <td>{{ n.get_formatted("discount_amount") }}</td> -->
+					<td class="text-right">{{ n.get_formatted("amount") }}</td>
+				</tr>
+				<tr>
+					<td></td>
+					<td colspan="4">{{ n.description }}</td>
+					<td></td>
+				</tr>
 			{% endfor %}
 		</tbody>
 
 		<tfoot class="black-border">
 			{% if doc.additional_discount_percentage or doc.discount_amount %}
-			<tr>
-				<td></td>
-				<td>{{ _("Total") }}</td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right">{{ doc.get_formatted("total") }}</td>
-			</tr>
-			<tr>
-				<td></td>
-				<td>{{ _("Discount") }}</td>
-				<td></td>
-				<td></td>
-				<td>
-					{% if doc.additional_discount_percentage %}
-					{{ doc.get_formatted("additional_discount_percentage") }} &percnt;
-					{% endif %}
-				</td>
-				<td class="text-right">
-					{{ doc.get_formatted("discount_amount") }}
-				</td>
-			</tr>
+				<tr>
+					<td></td>
+					<td>{{ _("Total") }}</td>
+					<td></td>
+					<td></td>
+					<td></td>
+					<td class="text-right">{{ doc.get_formatted("total") }}</td>
+				</tr>
+				<tr>
+					<td></td>
+					<td>{{ _("Discount") }}</td>
+					<td></td>
+					<td></td>
+					<td>
+						{% if doc.additional_discount_percentage %}
+							{{ doc.get_formatted("additional_discount_percentage") }} &percnt;
+						{% endif %}
+					</td>
+					<td class="text-right">
+						{{ doc.get_formatted("discount_amount") }}
+					</td>
+				</tr>
 			{% endif %}
 			<tr>
 				<td></td>
@@ -190,43 +172,32 @@
 				<td></td>
 				<td class="text-right">{{ doc.get_formatted("net_total") }}</td>
 			</tr>
-			{% if doc.tax_category == "Reverse Charge" -%}
-			<tr>
-				<td></td>
-				<td>Steuerschuldnerschaft des Leistungsempfängers / The recipient of the supply is liable for tax</td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right"></td>
-			</tr>
-			{% else %}
 			{% for tax_row in doc.taxes -%}
-			{% if tax_row.tax_amount or print_settings.print_taxes_with_zero_amount %}
-			<tr>
-				<td></td>
-				<td>
-					{{ tax_row.description }}
-				</td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right">
-					{{ tax_row.get_formatted("tax_amount") }}
-				</td>
-			</tr>
-			{% endif %}
+				{% if tax_row.tax_amount or print_settings.print_taxes_with_zero_amount %}
+					<tr>
+						<td></td>
+						<td>
+							{{ tax_row.description }}
+						</td>
+						<td></td>
+						<td></td>
+						<td></td>
+						<td class="text-right">
+							{{ tax_row.get_formatted("tax_amount") }}
+						</td>
+					</tr>
+				{% endif %}
 			{%- endfor %}
 
 			{% if doc.tax_exemption_reason %}
-			<tr>
-				<td></td>
-				<td>{{ _(doc.tax_exemption_reason) }}</td>
-				<td></td>
-				<td></td>
-				<td colspan="2"></td>
-			</tr>
+				<tr>
+					<td></td>
+					<td>{{ _(doc.tax_exemption_reason) }}</td>
+					<td></td>
+					<td></td>
+					<td colspan="2"></td>
+				</tr>
 			{% endif %}
-			{%- endif %}
 			<tr>
 				<td></td>
 				<td>
@@ -239,137 +210,137 @@
 				</td>
 			</tr>
 			{% if doc.total_advance %}
-			<tr>
-				<td></td>
-				<td>{{ _("Total Advance") }}</td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right">
-					{{ doc.get_formatted("total_advance") }}
-				</td>
-			</tr>
-			<tr>
-				<td></td>
-				<td>{{ _("Outstanding Amount") }}</td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right">
-					{{ doc.get_formatted("outstanding_amount") }}
-				</td>
-			</tr>
+				<tr>
+					<td></td>
+					<td>{{ _("Total Advance") }}</td>
+					<td></td>
+					<td></td>
+					<td></td>
+					<td class="text-right">
+						{{ doc.get_formatted("total_advance") }}
+					</td>
+				</tr>
+				<tr>
+					<td></td>
+					<td>{{ _("Outstanding Amount") }}</td>
+					<td></td>
+					<td></td>
+					<td></td>
+					<td class="text-right">
+						{{ doc.get_formatted("outstanding_amount") }}
+					</td>
+				</tr>
 			{% endif %}
 			{% if doc.get("custom_invoice_type") == "Final Invoice" and doc.get("custom_down_payments") %}
-			<tr class="prior-down-payments-header">
-				<td></td>
-				<td colspan="5"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
-			</tr>
-			{% for dp in doc.custom_down_payments %}
-			<tr class="prior-down-payment-row">
-				<td></td>
-				<td>{{ dp.invoice_no }}</td>
-				<td></td>
-				<td></td>
-				<td class="text-right"></td>
-				<td class="text-right">{{ frappe.utils.fmt_money(dp.grand_total, currency=doc.currency) }}</td>
-			</tr>
-			{% endfor %}
-			<tr class="prior-down-payments-outstanding">
-				<td></td>
-				<td><strong>{{ _("Outstanding After Down Payments") }}</strong></td>
-				<td></td>
-				<td></td>
-				<td></td>
-				<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.custom_outstanding_after_down_payments, currency=doc.currency) }}</strong></td>
-			</tr>
+				<tr class="prior-down-payments-header">
+					<td></td>
+					<td colspan="5"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
+				</tr>
+				{% for dp in doc.custom_down_payments %}
+					<tr class="prior-down-payment-row">
+						<td></td>
+						<td>{{ dp.invoice_no }}</td>
+						<td></td>
+						<td></td>
+						<td class="text-right"></td>
+						<td class="text-right">{{ frappe.utils.fmt_money(dp.grand_total, currency=doc.currency) }}</td>
+					</tr>
+				{% endfor %}
+				<tr class="prior-down-payments-outstanding">
+					<td></td>
+					<td><strong>{{ _("Outstanding After Down Payments") }}</strong></td>
+					<td></td>
+					<td></td>
+					<td></td>
+					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.custom_outstanding_after_down_payments, currency=doc.currency) }}</strong></td>
+				</tr>
 			{% endif %}
 		</tfoot>
 	</table>
 
 	{% if doc.incoterm %}
-	<p>{{ _("Terms of delivery") }}: Incoterms® 2020 {{ doc.incoterm }}{% if doc.named_place %} {{ doc.named_place }}{%
-		endif %}</p><br>
+		<p>{{ _("Terms of delivery") }}: Incoterms® 2020 {{ doc.incoterm }}{% if doc.named_place %} {{ doc.named_place }}{%
+			endif %}</p><br>
 	{% endif %}
 
 	{% if doc.terms and (doc.terms | striptags) %}
-	<br>
-	{{ doc.terms }}
+		<br>
+		{{ doc.terms }}
 	{% endif %}
 
 	{% if doc.timesheets -%}
-	<div style="page-break-after: always"></div>
-	<div class="timesheets">
-		<p style="padding-top: 1em; padding-bottom: 0.33em">
-			<strong>{{ _("Time Logs") }}</strong>
-		</p>
-		<div data-fieldname="timesheets" data-fieldtype="Table">
-			<table class="w-100 text-small">
-				<thead class="black-border">
-					<tr>
-						<th style="width: 40px" class="table-sr">{{ _("Sr") }}</th>
-						<th style="width: 80px;" class="" data-fieldname="timesheets" data-fieldtype="Table">
-							{{_("Date")}}</th>
-						<th style="width: 370px;" class="" data-fieldname="timesheets" data-fieldtype="Table">
-							{{_("Note")}}</th>
-						<th style="width: 80px;" class="text-right" data-fieldname="timesheets" data-fieldtype="Table">
-							{{_("Duration")}}</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for time_log in doc.timesheets | sort(attribute="start_date") %}
-					{% set timesheet = frappe.get_doc("Timesheet", time_log.time_sheet)%}
-					{% if timesheet.total_billable_amount > 0 %}
-					<tr style="page-break-inside: avoid;">
-						<td class="table-sr">{{ loop.index }}</td>
-						<td class="" data-fieldname="timesheets" data-fieldtype="Table">
-							<div class="value">
-								{{ frappe.utils.formatdate(timesheet.start_date, "dd.mm.yy") }}
-							</div>
-						</td>
-						<td class="" data-fieldname="timesheets" data-fieldtype="Table">
-							<div class="value">
-								{{ time_log.description }}
-							</div>
-						</td>
-						<td class="text-right" data-fieldname="timesheets" data-fieldtype="Table">
-							<div class="value">
-								{{
-								frappe.format(
-								frappe.utils.rounded(time_log.billing_hours * 60) * 60,
-								{"fieldtype": "Duration"}
-								)
-								}}
-							</div>
-						</td>
-					</tr>
-					{% endif %}
-					{% endfor %}
-				</tbody>
-				<tfoot class="black-border">
-					<tr>
-						<td></td>
-						<td></td>
-						<td>
-							<strong>
-								{{ _("Total Duration") }}
-							</strong>
-						</td>
-						<td class="text-right">
-							<strong>
-								{{
-								frappe.format(
-								frappe.utils.rounded(doc.total_billing_hours * 60) * 60,
-								{"fieldtype": "Duration", "hide_days": 1}
-								)
-								}}
-							</strong>
-						</td>
-					</tr>
-				</tfoot>
-			</table>
+		<div style="page-break-after: always"></div>
+		<div class="timesheets">
+			<p style="padding-top: 1em; padding-bottom: 0.33em">
+				<strong>{{ _("Time Logs") }}</strong>
+			</p>
+			<div data-fieldname="timesheets" data-fieldtype="Table">
+				<table class="w-100 text-small">
+					<thead class="black-border">
+						<tr>
+							<th style="width: 40px" class="table-sr">{{ _("Sr") }}</th>
+							<th style="width: 80px;" class="" data-fieldname="timesheets" data-fieldtype="Table">
+								{{_("Date")}}</th>
+							<th style="width: 370px;" class="" data-fieldname="timesheets" data-fieldtype="Table">
+								{{_("Note")}}</th>
+							<th style="width: 80px;" class="text-right" data-fieldname="timesheets" data-fieldtype="Table">
+								{{_("Duration")}}</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for time_log in doc.timesheets | sort(attribute="start_date") %}
+							{% set timesheet = frappe.get_doc("Timesheet", time_log.time_sheet)%}
+							{% if timesheet.total_billable_amount > 0 %}
+							<tr style="page-break-inside: avoid;">
+								<td class="table-sr">{{ loop.index }}</td>
+								<td class="" data-fieldname="timesheets" data-fieldtype="Table">
+									<div class="value">
+										{{ frappe.utils.formatdate(timesheet.start_date, "dd.mm.yy") }}
+									</div>
+								</td>
+								<td class="" data-fieldname="timesheets" data-fieldtype="Table">
+									<div class="value">
+										{{ time_log.description }}
+									</div>
+								</td>
+								<td class="text-right" data-fieldname="timesheets" data-fieldtype="Table">
+									<div class="value">
+										{{
+										frappe.format(
+										frappe.utils.rounded(time_log.billing_hours * 60) * 60,
+										{"fieldtype": "Duration"}
+										)
+										}}
+									</div>
+								</td>
+							</tr>
+							{% endif %}
+						{% endfor %}
+					</tbody>
+					<tfoot class="black-border">
+						<tr>
+							<td></td>
+							<td></td>
+							<td>
+								<strong>
+									{{ _("Total Duration") }}
+								</strong>
+							</td>
+							<td class="text-right">
+								<strong>
+									{{
+									frappe.format(
+									frappe.utils.rounded(doc.total_billing_hours * 60) * 60,
+									{"fieldtype": "Duration", "hide_days": 1}
+									)
+									}}
+								</strong>
+							</td>
+						</tr>
+					</tfoot>
+				</table>
+			</div>
 		</div>
-	</div>
 	{%- endif %}
 </div>
 
