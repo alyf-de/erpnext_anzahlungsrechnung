@@ -251,7 +251,7 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		.inner_join(sales_invoice_item)
 		.on(sales_invoice_item.parent == sales_invoice.name)
 		.select(
-			sales_invoice.name, sales_invoice.posting_date, sales_invoice.total, sales_invoice.grand_total
+			sales_invoice.name, sales_invoice.posting_date, sales_invoice.net_total, sales_invoice.grand_total
 		)
 		.where(
 			(sales_invoice_item.sales_order == doc.items[0].sales_order)
@@ -269,7 +269,7 @@ def append_down_payment_invoice_to_final_invoice(doc):
 			{
 				"invoice_no": down_payment_invoice.name,
 				"date": down_payment_invoice.posting_date,
-				"net_total": down_payment_invoice.total,
+				"net_total": down_payment_invoice.net_total,
 				"grand_total": down_payment_invoice.grand_total,
 			},
 		)
