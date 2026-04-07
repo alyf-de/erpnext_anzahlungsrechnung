@@ -3,7 +3,7 @@ default_stages: [pre-commit]
 fail_fast: false
 
 default_language_version:
-  python: python3.11
+  python: python3.14
 
 
 repos:
