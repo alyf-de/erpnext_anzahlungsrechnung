@@ -252,7 +252,7 @@
 					<td></td>
 					<td></td>
 					<td></td>
-					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.custom_outstanding_after_down_payments, currency=doc.currency) }}</strong></td>
+					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</strong></td>
 				</tr>
 			{% endif %}
 		</tfoot>
