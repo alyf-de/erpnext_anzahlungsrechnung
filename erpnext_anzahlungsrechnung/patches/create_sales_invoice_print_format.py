@@ -1,5 +1,6 @@
-import frappe
 from pathlib import Path
+
+import frappe
 
 PRINT_FORMAT_NAME = "Rechnung (inkl. Anzahlungs- und Schlussrechnung)"
 

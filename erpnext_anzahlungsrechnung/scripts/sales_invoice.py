@@ -251,7 +251,9 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		frappe.qb.from_(sales_invoice)
 		.inner_join(sales_invoice_item)
 		.on(sales_invoice_item.parent == sales_invoice.name)
-		.select(sales_invoice.name, sales_invoice.posting_date, sales_invoice.total, sales_invoice.grand_total)
+		.select(
+			sales_invoice.name, sales_invoice.posting_date, sales_invoice.total, sales_invoice.grand_total
+		)
 		.where(
 			(sales_invoice_item.sales_order == doc.items[0].sales_order)
 			& (sales_invoice.docstatus == 1)
