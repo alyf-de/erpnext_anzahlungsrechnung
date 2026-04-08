@@ -54,7 +54,7 @@ def on_submit(doc, event):
 def validate_consistent_currency(doc):
 	"""
 	Ensure the currency of the Sales Invoice is consistent with the currencies of:
-	Sales Order, Company Currency, Sales Invoice Currency, Debit To Currency.
+	Sales Order, Taxes and Income Accounts, Sales Invoice Currency, Debit To Currency.
 	This validation only runs for Down Payment Invoices and Final Invoices.
 	"""
 	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
