@@ -11,24 +11,28 @@ def get_custom_fields():
 	custom_fields = {
 		"Company": [
 			{
+				"fieldname": "custom_down_payment_section",
+				"label": "Down Payment",
+				"fieldtype": "Section Break",
+				"insert_after": "default_finance_book",
+			},
+			{
 				"fieldname": "custom_requested_payments_account",
 				"label": "Requested Payments Account",
 				"fieldtype": "Link",
-				"insert_after": "default_income_account",
+				"insert_after": "custom_down_payment_section",
 				"ignore_user_permissions": 1,
 				"options": "Account",
 				"link_filters": liability_account_filters,
 				"description": "Liability: neutralization and payment clearing for down payment invoices.",
 			},
 			{
-				"fieldname": "custom_received_prepayments_account",
-				"label": "Received Pre Payments",
-				"fieldtype": "Link",
+				"fieldname": "custom_down_payment_accounts",
+				"label": "Down Payment Accounts",
+				"fieldtype": "Table",
 				"insert_after": "custom_requested_payments_account",
-				"ignore_user_permissions": 1,
-				"options": "Account",
-				"link_filters": liability_account_filters,
-				"description": "Liability: received prepayments until recognized on final invoice.",
+				"options": "Company Down Payment Account",
+				"description": "Down Payment Accounts for different tax rates.",
 			},
 		],
 		"Journal Entry": [
