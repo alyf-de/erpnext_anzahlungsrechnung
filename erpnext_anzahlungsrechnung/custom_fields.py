@@ -3,7 +3,56 @@ def get_custom_fields():
 	Custom Fields for ERPNext Anzahlungsrechnung (updates are triggered by patches.txt.)
 	DocTypes are ordered alphabetically.
 	"""
+	liability_account_filters = (
+		'[["Account", "company", "=", "eval:doc.name"], '
+		'["Account", "root_type", "=", "Liability"], '
+		'["Account", "is_group", "=", "0"]]'
+	)
 	custom_fields = {
+		"Company": [
+			{
+				"fieldname": "custom_requested_payments_account",
+				"label": "Requested Payments Account",
+				"fieldtype": "Link",
+				"insert_after": "default_income_account",
+				"ignore_user_permissions": 1,
+				"options": "Account",
+				"link_filters": liability_account_filters,
+				"description": "Liability: neutralization and payment clearing for down payment invoices.",
+			},
+			{
+				"fieldname": "custom_received_prepayments_account",
+				"label": "Received Pre Payments",
+				"fieldtype": "Link",
+				"insert_after": "custom_requested_payments_account",
+				"ignore_user_permissions": 1,
+				"options": "Account",
+				"link_filters": liability_account_filters,
+				"description": "Liability: received prepayments until recognized on final invoice.",
+			},
+		],
+		"Journal Entry": [
+			{
+				"fieldname": "custom_dp_sales_invoice",
+				"label": "Down Payment Sales Invoice",
+				"fieldtype": "Link",
+				"insert_after": "company",
+				"options": "Sales Invoice",
+				"read_only": 1,
+				"allow_on_submit": 1,
+				"no_copy": 1,
+			},
+			{
+				"fieldname": "custom_dp_payment_entry",
+				"label": "Down Payment Payment Entry",
+				"fieldtype": "Link",
+				"insert_after": "custom_dp_sales_invoice",
+				"options": "Payment Entry",
+				"read_only": 1,
+				"allow_on_submit": 1,
+				"no_copy": 1,
+			},
+		],
 		"Sales Invoice": [
 			{
 				"fieldname": "custom_invoice_type",
