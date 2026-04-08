@@ -17,6 +17,7 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 
 
 def before_validate(doc, event):
+	validate_consistent_currency(doc)
 	validate_sales_order_consistency(doc)
 	append_down_payment_invoice_to_final_invoice(doc)
 
@@ -48,6 +49,57 @@ def on_submit(doc, event):
 		post_neutralization_journal_for_down_payment_invoice(doc)
 	elif doc.custom_invoice_type == "Final Invoice":
 		post_prepayment_recognition_journal_for_final_invoice(doc)
+
+
+def validate_consistent_currency(doc):
+	"""
+	Ensure the currency of the Sales Invoice is consistent with the currencies of:
+	Sales Order, Company Currency, Sales Invoice Currency, Debit To Currency.
+	This validation only runs for Down Payment Invoices and Final Invoices.
+	"""
+	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
+		return
+
+	so_currency = frappe.db.get_value("Sales Order", doc.items[0].sales_order, "currency")
+	si_currency = doc.currency
+
+	# Check 1: Income Accounts
+	seen_accounts = set()
+	for item in doc.items:
+		if item.income_account in seen_accounts:
+			continue
+		seen_accounts.add(item.income_account)
+		if frappe.db.get_value("Account", item.income_account, "account_currency") != si_currency:
+			frappe.throw(
+				_(
+					"The currency of the Income Account {0} does not match the currency of the Sales Invoice."
+				).format(item.income_account)
+			)
+
+	# Check 2: Tax Accounts
+	for tax in doc.taxes:
+		if tax.account_currency != si_currency:
+			frappe.throw(
+				_("The currency of the Tax Row {0} does not match the currency of the Sales Invoice.").format(
+					tax.idx
+				)
+			)
+
+	# Check 3: Debit To Currency and Sales Order Currency
+	if so_currency == si_currency == doc.party_account_currency:
+		# All currencies are consistent
+		return
+	else:
+		msg = _(
+			"The currency of the Sales Invoice must be the same as the currency of the Sales Order and the Debit To Currency."
+		)
+		msg += "<br><br>"
+		msg += _("Sales Order Currency: {0}").format(so_currency)
+		msg += "<br>"
+		msg += _("Sales Invoice Currency: {0}").format(si_currency)
+		msg += "<br>"
+		msg += _("Debit To Currency: {0}").format(doc.party_account_currency)
+		frappe.throw(msg)
 
 
 def validate_sales_order_consistency(doc):
