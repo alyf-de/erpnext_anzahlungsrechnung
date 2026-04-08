@@ -1,11 +1,105 @@
+from collections import defaultdict
+
 import frappe
 from frappe import _
+from frappe.query_builder import DocType
+from frappe.utils import cint, flt
 from frappe.utils.formatters import format_value
+
+from erpnext_anzahlungsrechnung.scripts.utils import (
+	append_je_row,
+	default_cost_center,
+	get_company_liability_accounts,
+	insert_and_submit_je,
+	merge_je_account_rows,
+	require_company_liability_accounts,
+)
 
 
 def before_validate(doc, event):
+	validate_consistent_currency(doc)
 	validate_sales_order_consistency(doc)
 	append_down_payment_invoice_to_final_invoice(doc)
+
+
+def on_submit(doc, event):
+	"""Post journal entries for down payment / final invoice flows (neutralization, prepayment recognition, return reversals)."""
+	if doc.is_consolidated or doc.is_internal_transfer():
+		return
+	if cint(doc.get("is_pos")):
+		return
+
+	if doc.is_return and doc.return_against:
+		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
+		if orig_type == "Down Payment Invoice":
+			pes = get_submitted_payment_entries_against_si(doc.return_against)
+			if pes:
+				frappe.throw(
+					_("Cancel Payment Entries against {0} before this return: {1}").format(
+						doc.return_against,
+						", ".join(pes),
+					)
+				)
+			post_neutralization_reversal_journal_for_down_payment_credit_note(doc)
+		elif orig_type == "Final Invoice":
+			post_prepayment_reversal_journal_for_final_invoice_credit_note(doc)
+		return
+
+	if doc.custom_invoice_type == "Down Payment Invoice":
+		post_neutralization_journal_for_down_payment_invoice(doc)
+	elif doc.custom_invoice_type == "Final Invoice":
+		post_prepayment_recognition_journal_for_final_invoice(doc)
+
+
+def validate_consistent_currency(doc):
+	"""
+	Ensure the currency of the Sales Invoice is consistent with the currencies of:
+	Sales Order, Taxes and Income Accounts, Sales Invoice Currency, Debit To Currency.
+	This validation only runs for Down Payment Invoices and Final Invoices.
+	"""
+	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
+		return
+
+	so_currency = frappe.db.get_value("Sales Order", doc.items[0].sales_order, "currency")
+	si_currency = doc.currency
+
+	# Check 1: Income Accounts
+	seen_accounts = set()
+	for item in doc.items:
+		if item.income_account in seen_accounts:
+			continue
+		seen_accounts.add(item.income_account)
+		if frappe.db.get_value("Account", item.income_account, "account_currency") != si_currency:
+			frappe.throw(
+				_(
+					"The currency of the Income Account {0} does not match the currency of the Sales Invoice."
+				).format(item.income_account)
+			)
+
+	# Check 2: Tax Accounts
+	for tax in doc.taxes:
+		if tax.account_currency != si_currency:
+			frappe.throw(
+				_("The currency of the Tax Row {0} does not match the currency of the Sales Invoice.").format(
+					tax.idx
+				)
+			)
+
+	# Check 3: Debit To Currency and Sales Order Currency
+	if so_currency == si_currency == doc.party_account_currency:
+		# All currencies are consistent
+		return
+	else:
+		msg = _(
+			"The currency of the Sales Invoice must be the same as the currency of the Sales Order and the Debit To Currency."
+		)
+		msg += "<br><br>"
+		msg += _("Sales Order Currency: {0}").format(so_currency)
+		msg += "<br>"
+		msg += _("Sales Invoice Currency: {0}").format(si_currency)
+		msg += "<br>"
+		msg += _("Debit To Currency: {0}").format(doc.party_account_currency)
+		frappe.throw(msg)
 
 
 def validate_sales_order_consistency(doc):
@@ -193,7 +287,6 @@ def _ensure_final_invoice_completes_sales_order_positions(doc):
 
 def _validate_sum_of_invoices_against_sales_order(doc):
 	"""Validate submitted invoice totals equal the linked Sales Order total."""
-	from frappe.query_builder import DocType
 	from frappe.query_builder.functions import Sum
 
 	sales_order = doc.items[0].sales_order
@@ -241,8 +334,6 @@ def append_down_payment_invoice_to_final_invoice(doc):
 	if doc.custom_invoice_type != "Final Invoice":
 		return
 
-	from frappe.query_builder import DocType
-
 	sales_invoice = DocType("Sales Invoice")
 	sales_invoice_item = DocType("Sales Invoice Item")
 
@@ -273,3 +364,334 @@ def append_down_payment_invoice_to_final_invoice(doc):
 				"grand_total": down_payment_invoice.grand_total,
 			},
 		)
+
+
+def post_neutralization_journal_for_down_payment_invoice(si) -> str:
+	"""Debit income and tax accounts (undoing the SI posting), credit Requested Payments liability."""
+	require_company_liability_accounts(si.company, need_received=False)
+	requested_acc, _received_acc_unused = get_company_liability_accounts(si.company)
+
+	income_totals, income_cc, income_proj = _aggregate_income_by_account(si)
+	tax_totals, tax_cc = _aggregate_tax_by_account(si)
+
+	rows = []
+	for acc, amt in sorted(income_totals.items()):
+		append_je_row(
+			rows,
+			acc,
+			amt,
+			0,
+			income_cc.get(acc) or default_cost_center(si.company),
+			income_proj.get(acc),
+		)
+	for acc, amt in sorted(tax_totals.items()):
+		append_je_row(rows, acc, amt, 0, tax_cc.get(acc) or default_cost_center(si.company), None)
+
+	total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
+	if not total_debit:
+		frappe.throw(_("No income or tax lines to neutralize for {0}.").format(si.name))
+
+	append_je_row(
+		rows,
+		requested_acc,
+		0,
+		total_debit,
+		None,
+		None,
+	)
+
+	je = insert_and_submit_je(
+		si.company,
+		si.posting_date,
+		rows,
+		_("Down payment invoice neutralization for {0}").format(si.name),
+		_("Down Payment Neutralization"),
+		sales_invoice=si.name,
+		payment_entry=None,
+	)
+	return je.name
+
+
+def post_neutralization_reversal_journal_for_down_payment_credit_note(return_si) -> str:
+	"""Mirror of neutralization for a credit note: credit income/tax, debit Requested Payments (pairs with return SI GL)."""
+	require_company_liability_accounts(return_si.company, need_received=False)
+	requested_acc, _received_acc_unused = get_company_liability_accounts(return_si.company)
+
+	income_totals, income_cc, income_proj = _aggregate_income_by_account(return_si)
+	tax_totals, tax_cc = _aggregate_tax_by_account(return_si)
+
+	rows = []
+	for acc, amt in sorted(income_totals.items()):
+		amt = abs(flt(amt))
+		if not amt:
+			continue
+		append_je_row(
+			rows,
+			acc,
+			0,
+			amt,
+			income_cc.get(acc) or default_cost_center(return_si.company),
+			income_proj.get(acc),
+		)
+	for acc, amt in sorted(tax_totals.items()):
+		amt = abs(flt(amt))
+		if not amt:
+			continue
+		append_je_row(
+			rows,
+			acc,
+			0,
+			amt,
+			tax_cc.get(acc) or default_cost_center(return_si.company),
+			None,
+		)
+
+	total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
+	if not total_credit:
+		frappe.throw(_("No income or tax lines for reversal on {0}.").format(return_si.name))
+
+	append_je_row(
+		rows,
+		requested_acc,
+		total_credit,
+		0,
+		None,
+		None,
+	)
+
+	je = insert_and_submit_je(
+		return_si.company,
+		return_si.posting_date,
+		rows,
+		_("Down payment credit note — neutralization reversal for {0}").format(return_si.name),
+		_("Down Payment Neutralization Rev."),
+		sales_invoice=return_si.name,
+		payment_entry=None,
+	)
+	return je.name
+
+
+def post_prepayment_recognition_journal_for_final_invoice(si) -> str:
+	"""Debit Received Prepayments, credit income accounts (per linked down payment invoices)."""
+	require_company_liability_accounts(si.company, need_received=True)
+	_requested_acc_unused, received_acc = get_company_liability_accounts(si.company)
+
+	rows = []
+
+	for dp in si.get("custom_down_payments") or []:
+		dpsi = frappe.get_doc("Sales Invoice", dp.invoice_no)
+		if dpsi.docstatus != 1 or dpsi.custom_invoice_type != "Down Payment Invoice":
+			frappe.throw(
+				_("Down payment invoice {0} must be a submitted Down Payment Invoice.").format(dp.invoice_no)
+			)
+		if not _get_latest_submitted_je_for_si(dp.invoice_no):
+			frappe.throw(
+				_("Down payment invoice {0} has no neutralization journal yet.").format(dp.invoice_no)
+			)
+
+		income_totals, income_cc, income_proj = _aggregate_income_by_account(dpsi)
+		dp_net = flt(dp.net_total)
+		si_net = flt(dpsi.base_net_total)
+		if not si_net or not dp_net:
+			continue
+		if not income_totals:
+			frappe.throw(
+				_("Down payment invoice {0} has no income lines for prepayment recognition.").format(
+					dp.invoice_no
+				)
+			)
+
+		append_je_row(
+			rows,
+			received_acc,
+			dp_net,
+			0,
+			None,
+			None,
+			party_type="Customer",
+			party=si.customer,
+		)
+
+		credit_lines = []
+		for acc, amt in income_totals.items():
+			share = flt(dp_net * amt / si_net, 2)
+			if share:
+				credit_lines.append((acc, share, income_cc.get(acc), income_proj.get(acc)))
+
+		sum_credits = sum(c[1] for c in credit_lines)
+		if credit_lines and abs(sum_credits - dp_net) > 0.02:
+			first = credit_lines[0]
+			credit_lines[0] = (first[0], flt(first[1] + (dp_net - sum_credits)), first[2], first[3])
+
+		for acc, share, icc, ip in credit_lines:
+			append_je_row(
+				rows,
+				acc,
+				0,
+				share,
+				icc or default_cost_center(si.company),
+				ip,
+			)
+
+	total_debit_check = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
+	total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
+	if abs(total_debit_check - total_credit) > 0.02:
+		frappe.throw(
+			_(
+				"Final invoice prepayment recognition journal does not balance (debit {0}, credit {1})."
+			).format(total_debit_check, total_credit)
+		)
+
+	je = insert_and_submit_je(
+		si.company,
+		si.posting_date,
+		rows,
+		_("Final invoice prepayment recognition for {0}").format(si.name),
+		_("Final Invoice Prepayment Recognition"),
+		sales_invoice=si.name,
+		payment_entry=None,
+	)
+	return je.name
+
+
+def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) -> str:
+	"""Reverse prepayment recognition in proportion to this credit note against a Final Invoice."""
+	if not return_si.return_against:
+		frappe.throw(_("Return invoice must reference the original invoice."))
+
+	original = frappe.get_doc("Sales Invoice", return_si.return_against)
+	if original.custom_invoice_type != "Final Invoice":
+		frappe.throw(_("This reversal only applies when the original invoice is a Final Invoice."))
+
+	prepayment_je_name = _get_latest_submitted_je_for_si(original.name)
+	if not prepayment_je_name:
+		frappe.throw(
+			_("Original final invoice {0} has no prepayment recognition journal.").format(original.name)
+		)
+
+	prepayment_je = frappe.get_doc("Journal Entry", prepayment_je_name)
+	orig_net = abs(flt(original.base_net_total))
+	ret_net = abs(flt(return_si.base_net_total))
+	ratio = ret_net / orig_net if orig_net else 1.0
+
+	rows = []
+	for line in prepayment_je.accounts:
+		debit = abs(flt(line.debit_in_account_currency)) * ratio
+		credit = abs(flt(line.credit_in_account_currency)) * ratio
+		if not debit and not credit:
+			continue
+		if debit:
+			append_je_row(
+				rows,
+				line.account,
+				0,
+				debit,
+				line.cost_center,
+				line.project,
+				party_type=line.party_type or None,
+				party=line.party or None,
+			)
+		if credit:
+			append_je_row(
+				rows,
+				line.account,
+				credit,
+				0,
+				line.cost_center,
+				line.project,
+				party_type=line.party_type or None,
+				party=line.party or None,
+			)
+
+	rows = merge_je_account_rows(rows)
+	total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
+	total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
+	if abs(total_debit - total_credit) > 0.02:
+		frappe.throw(_("Final invoice prepayment credit note journal does not balance."))
+
+	je = insert_and_submit_je(
+		return_si.company,
+		return_si.posting_date,
+		rows,
+		_("Final invoice prepayment reversal for {0}").format(return_si.name),
+		_("Final Invoice Prepayment Reversal"),
+		sales_invoice=return_si.name,
+		payment_entry=None,
+	)
+	return je.name
+
+
+def get_submitted_payment_entries_against_si(sales_invoice_name: str) -> list[str]:
+	"""Names of submitted Payment Entries that allocate to this Sales Invoice."""
+	pe_ref = DocType("Payment Entry Reference")
+	pe = DocType("Payment Entry")
+	q = (
+		frappe.qb.from_(pe_ref)
+		.inner_join(pe)
+		.on(pe_ref.parent == pe.name)
+		.select(pe.name)
+		.distinct()
+		.where(
+			(pe_ref.reference_doctype == "Sales Invoice")
+			& (pe_ref.reference_name == sales_invoice_name)
+			& (pe.docstatus == 1)
+		)
+	)
+	return q.run(pluck=True)
+
+
+def _get_latest_submitted_je_for_si(sales_invoice_name: str) -> str | None:
+	"""Newest submitted automation Journal Entry linked to this Sales Invoice (`custom_dp_sales_invoice`)."""
+	names = frappe.get_all(
+		"Journal Entry",
+		filters={"custom_dp_sales_invoice": sales_invoice_name, "docstatus": 1},
+		pluck="name",
+		order_by="creation desc",
+		limit_page_length=1,
+	)
+	return names[0] if names else None
+
+
+def _aggregate_income_by_account(doc):
+	enable_discount_accounting = cint(
+		frappe.get_single_value("Selling Settings", "enable_discount_accounting")
+	)
+	totals = defaultdict(float)
+	cc = {}
+	proj = {}
+	for item in doc.get("items") or []:
+		if doc.is_internal_transfer():
+			continue
+		if item.get("is_fixed_asset") and item.get("asset"):
+			continue
+		income_account = (
+			item.income_account
+			if (not item.enable_deferred_revenue or doc.is_return)
+			else item.deferred_revenue_account
+		)
+		if not income_account:
+			continue
+		_net_amt, base_amount = doc.get_amount_and_base_amount(item, enable_discount_accounting)
+		if not flt(base_amount, item.precision("base_net_amount")):
+			continue
+		totals[income_account] += flt(base_amount)
+		cc.setdefault(income_account, item.cost_center)
+		proj.setdefault(income_account, item.project or doc.get("project"))
+	return totals, cc, proj
+
+
+def _aggregate_tax_by_account(doc):
+	enable_discount_accounting = cint(
+		frappe.get_single_value("Selling Settings", "enable_discount_accounting")
+	)
+	totals = defaultdict(float)
+	cc = {}
+	for tax in doc.get("taxes") or []:
+		if not tax.account_head:
+			continue
+		if not flt(tax.base_tax_amount_after_discount_amount):
+			continue
+		_tax_amt, base_amount = doc.get_tax_amounts(tax, enable_discount_accounting)
+		totals[tax.account_head] += flt(base_amount)
+		cc.setdefault(tax.account_head, tax.cost_center)
+	return totals, cc
