@@ -21,7 +21,11 @@ def get_company_down_payment_map(company):
 	"""Map income_account -> row (income_account, tax_rate, tax_account, received_down_payment_account)."""
 	rows = frappe.get_all(
 		"Company Down Payment Account",
-		filters={"parent": company},
+		filters={
+			"parent": company,
+			"parenttype": "Company",
+			"parentfield": "custom_down_payment_accounts",
+		},
 		fields=["income_account", "tax_rate", "tax_account", "received_down_payment_account"],
 	)
 	return {r["income_account"]: r for r in rows}
