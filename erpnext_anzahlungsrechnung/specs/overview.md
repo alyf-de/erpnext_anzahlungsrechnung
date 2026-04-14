@@ -55,16 +55,16 @@ Example:
 | **SUMME**                         | **0,00 €**      | **3.570,00 €** | **3.000,00 €** | **570,00 €** | **0,00 €**                | **0,00 €**                  |
 
 
-### Automization 1
+### Automation 1
 
 After a Down Payment Invoice is submitted, the income account(s) and tax account(s) shall be immediately neutralized with respective **Journal Entries**.
 For this a new custom account field in **Company** is used as an against account. Name of the field: *Requested Payments Account*.
 
 Edge Cases:
 
-- A Down Payment Invoice is returned -> Then the automization shall run as well, this time it shall be the other way round (such that all acounts are "reset").
+- A Down Payment Invoice is returned -> Then the Automation shall run as well, this time it shall be the other way round (such that all acounts are "reset").
 
-### Automization 2
+### Automation 2
 
 After the **Payment Entry** is made against a Down Payment Invoice, following **Journal Entry** is created:
 
@@ -72,7 +72,7 @@ After the **Payment Entry** is made against a Down Payment Invoice, following **
 - Taxes are raised (as in the **Sales Invoice**)
 - Received Pre Payments (new account in **Company**, also of root_type Liability) is raised.
 
-### Automization 3
+### Automation 3
 
 After a final Invoice is submitted, another **Journal Entry** is created (one per Down Payment Invoice):
 The received payments shall be shifted to income, as per respective Down Payment Invoice.
