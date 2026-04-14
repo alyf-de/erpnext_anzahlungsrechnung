@@ -552,7 +552,6 @@ def post_neutralization_reversal_journal_for_down_payment_credit_note(return_si)
 
 def post_prepayment_recognition_journal_for_final_invoice(si) -> str | None:
 	"""Debit Received Down Payment liability and credit income — one balanced Journal Entry per income account."""
-	require_requested_payments_account(si.company)
 	dp_map = get_company_down_payment_map(si.company)
 
 	last_je_name = None
