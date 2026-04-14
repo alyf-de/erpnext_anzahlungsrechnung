@@ -133,12 +133,16 @@ after_install = "erpnext_anzahlungsrechnung.install.after_install"
 # Hook on document methods and events
 
 doc_events = {
+	"Company": {
+		"validate": "erpnext_anzahlungsrechnung.scripts.company.validate",
+	},
 	"Payment Entry": {
 		"on_submit": "erpnext_anzahlungsrechnung.scripts.payment_entry.on_submit",
 	},
 	"Sales Invoice": {
 		"before_print": "erpnext_anzahlungsrechnung.scripts.print_and_e_invoice_utils.before_print",
 		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_validate",
+		"validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.validate",
 		"on_submit": "erpnext_anzahlungsrechnung.scripts.sales_invoice.on_submit",
 	},
 	"Sales Order": {

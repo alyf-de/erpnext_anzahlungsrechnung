@@ -5,12 +5,15 @@ from frappe import _
 from frappe.utils import cint, flt
 
 from erpnext_anzahlungsrechnung.scripts.utils import (
+	aggregate_income_by_account,
 	append_je_row,
 	default_cost_center,
-	get_company_liability_accounts,
+	get_company_down_payment_map,
+	get_requested_payments_account,
 	insert_and_submit_je,
 	merge_je_account_rows,
-	require_company_liability_accounts,
+	require_down_payment_accounts_for_income,
+	require_requested_payments_account,
 )
 
 
@@ -21,7 +24,7 @@ def on_submit(doc, event):
 
 
 def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
-	"""For each allocated Down Payment Sales Invoice: debit Requested Payments, credit tax accounts and Received Prepayments (net/tax split)."""
+	"""For each allocated Down Payment Sales Invoice: debit Requested Payments, credit tax accounts and Received Down Payment accounts (net/tax split)."""
 	ref_rows = []
 	for d in pe.get("references") or []:
 		if d.reference_doctype != "Sales Invoice" or not d.reference_name or not flt(d.allocated_amount):
@@ -34,14 +37,18 @@ def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
 	if not ref_rows:
 		return None
 
-	require_company_liability_accounts(pe.company, need_received=True)
-	requested_acc, received_acc = get_company_liability_accounts(pe.company)
+	require_requested_payments_account(pe.company)
+	requested_acc = get_requested_payments_account(pe.company)
 
 	rows = []
 	ref_type, ref_name = "Payment Entry", pe.name
 
 	for d in ref_rows:
 		si = frappe.get_doc("Sales Invoice", d.reference_name)
+		income_totals, _cc, _proj = aggregate_income_by_account(si)
+		require_down_payment_accounts_for_income(pe.company, income_totals.keys())
+		dp_map = get_company_down_payment_map(pe.company)
+
 		alloc_base = flt(pe.calculate_base_allocated_amount_for_reference(d))
 		if not alloc_base:
 			continue
@@ -92,19 +99,32 @@ def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
 					ref_name,
 				)
 
-		if net_portion:
-			append_je_row(
-				rows,
-				received_acc,
-				0,
-				net_portion,
-				None,
-				None,
-				ref_type,
-				ref_name,
-				party_type=pe.party_type,
-				party=pe.party,
-			)
+		if net_portion and base_net:
+			recv_lines = []
+			for acc, amt in income_totals.items():
+				if not amt:
+					continue
+				part = flt(net_portion * flt(amt) / base_net, 2)
+				if part:
+					received_acc = dp_map[acc]["received_down_payment_account"]
+					recv_lines.append((received_acc, part))
+			sum_recv = sum(x[1] for x in recv_lines)
+			if recv_lines and abs(sum_recv - net_portion) > 0.01:
+				first_acc, first_amt = recv_lines[0]
+				recv_lines[0] = (first_acc, flt(first_amt + (net_portion - sum_recv)))
+			for received_acc, part in recv_lines:
+				append_je_row(
+					rows,
+					received_acc,
+					0,
+					part,
+					None,
+					None,
+					ref_type,
+					ref_name,
+					party_type=pe.party_type,
+					party=pe.party,
+				)
 
 	rows = merge_je_account_rows(rows)
 

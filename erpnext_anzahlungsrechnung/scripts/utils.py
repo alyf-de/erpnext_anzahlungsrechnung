@@ -1,27 +1,70 @@
+from collections import defaultdict
+
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cint, flt
 
 
-def require_company_liability_accounts(company, need_received=False):
-	"""Ensure Company has Requested Payments (and optionally Received Prepayments) accounts set."""
-	requested, received = get_company_liability_accounts(company)
-	if not requested:
+def require_requested_payments_account(company):
+	"""Ensure Company has Requested Payments account set."""
+	if not get_requested_payments_account(company):
 		frappe.throw(
 			_("Set {0} on Company {1}.").format(_("Requested Payments Account"), frappe.bold(company))
 		)
-	if need_received and not received:
-		frappe.throw(_("Set {0} on Company {1}.").format(_("Received Pre Payments"), frappe.bold(company)))
-	return requested, received
 
 
-def get_company_liability_accounts(company):
-	requested, received = frappe.db.get_value(
-		"Company",
-		company,
-		["custom_requested_payments_account", "custom_received_prepayments_account"],
+def get_requested_payments_account(company):
+	return frappe.db.get_value("Company", company, "custom_requested_payments_account")
+
+
+def get_company_down_payment_map(company):
+	"""Map income_account -> row (income_account, tax_rate, tax_account, received_down_payment_account)."""
+	rows = frappe.get_all(
+		"Company Down Payment Account",
+		filters={"parent": company},
+		fields=["income_account", "tax_rate", "tax_account", "received_down_payment_account"],
 	)
-	return requested, received
+	return {r["income_account"]: r for r in rows}
+
+
+def require_down_payment_accounts_for_income(company, income_accounts):
+	"""Ensure every income account in the iterable is configured on Company Down Payment Account."""
+	missing = [a for a in income_accounts if a and a not in get_company_down_payment_map(company)]
+	if missing:
+		frappe.throw(
+			_("Configure Down Payment Accounts on Company {0} for the following income accounts: {1}").format(
+				frappe.bold(company), ", ".join(frappe.bold(a) for a in sorted(set(missing)))
+			)
+		)
+
+
+def aggregate_income_by_account(doc):
+	"""Net base amount per income account (same rules as Sales Invoice GL income lines)."""
+	enable_discount_accounting = cint(
+		frappe.get_single_value("Selling Settings", "enable_discount_accounting")
+	)
+	totals = defaultdict(float)
+	cc = {}
+	proj = {}
+	for item in doc.get("items") or []:
+		if doc.is_internal_transfer():
+			continue
+		if item.get("is_fixed_asset") and item.get("asset"):
+			continue
+		income_account = (
+			item.income_account
+			if (not item.enable_deferred_revenue or doc.is_return)
+			else item.deferred_revenue_account
+		)
+		if not income_account:
+			continue
+		_net_amt, base_amount = doc.get_amount_and_base_amount(item, enable_discount_accounting)
+		if not flt(base_amount, item.precision("base_net_amount")):
+			continue
+		totals[income_account] += flt(base_amount)
+		cc.setdefault(income_account, item.cost_center)
+		proj.setdefault(income_account, item.project or doc.get("project"))
+	return totals, cc, proj
 
 
 def default_cost_center(company):
