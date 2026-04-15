@@ -19,7 +19,8 @@ frappe.ui.form.on("Sales Order", {
 
 function show_down_payment_sales_invoice_dialog(frm) {
 	const per_billed = flt(frm.doc.per_billed);
-	const partial_locked = per_billed === 0;
+	// Treat near-zero % as unbilled (avoids float noise blocking the final-invoice option incorrectly).
+	const partial_locked = per_billed < 0.01;
 
 	let dialog;
 
