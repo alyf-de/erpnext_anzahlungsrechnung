@@ -292,7 +292,7 @@
 					<td></td>
 					<td></td>
 					{% if show_tax_rate_col %}<td></td>{% endif %}
-					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</strong></td>
+					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.outstanding_amount, currency=doc.currency) }}</strong></td>
 				</tr>
 			{% endif %}
 		</tfoot>
