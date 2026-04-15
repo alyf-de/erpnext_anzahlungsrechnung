@@ -83,6 +83,7 @@
 <div id="faltmarke-2" class="din-mark"></div>
 
 <!-- CONTENT -->
+{% set show_tax_rate_col = not (doc.get("custom_invoice_type") == "Down Payment Invoice" and doc.get("custom_summarize_positions")) %}
 <div id="text">
 	<div id="subject">
 		{% if doc.is_return %}
@@ -106,13 +107,16 @@
 		<thead class="black-border">
 			<tr>
 				<th style="width: 5%">{{ _("Sr") }}</th>
-				<th style="width: 45%">
+				<th style="width: {{ '38%' if show_tax_rate_col else '45%' }}">
 					{{ _("Description") }}</th>
 				<th style="width: 10%">{{ _("Unit") if not print_settings.print_uom_after_quantity else '&nbsp;'}}</th>
-				<th style="width: 10%">{{ _("Qty") }}</th>
-				<th style="width: 12%">{{ _("Price") }}</th>
+				<th style="width: {{ '9%' if show_tax_rate_col else '10%' }}">{{ _("Qty") }}</th>
+				<th style="width: {{ '11%' if show_tax_rate_col else '12%' }}">{{ _("Price") }}</th>
+				{% if show_tax_rate_col %}
+				<th style="width: 8%">{{ _("Tax Rate") }}</th>
+				{% endif %}
 				<!-- <th style="width: 15%">{{ _("Discount") }}</th> -->
-				<th style="width: 18%" class="text-right">{{ _("Amount") }}</th>
+				<th style="width: {{ '19%' if show_tax_rate_col else '18%' }}" class="text-right">{{ _("Amount") }}</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -128,12 +132,22 @@
 						{% endif %}
 					</td>
 					<td>{{ n.get_formatted("rate") }}</td>
+					{% if show_tax_rate_col %}
+					<td class="text-right">
+						{% if n.tax_rate %}
+							{% for r in n.tax_rate %}
+								{%- if not loop.first %} + {% endif -%}
+								{{ frappe.format(r, {"fieldtype": "Float", "precision": 2}) }}&nbsp;&percnt;
+							{% endfor %}
+						{% endif %}
+					</td>
+					{% endif %}
 					<!-- <td>{{ n.get_formatted("discount_amount") }}</td> -->
 					<td class="text-right">{{ n.get_formatted("amount") }}</td>
 				</tr>
 				<tr>
 					<td></td>
-					<td colspan="4">{{ n.description }}</td>
+					<td colspan="{{ 5 if show_tax_rate_col else 4 }}">{{ n.description }}</td>
 					<td></td>
 				</tr>
 			{% endfor %}
@@ -147,6 +161,7 @@
 					<td></td>
 					<td></td>
 					<td></td>
+					{% if show_tax_rate_col %}<td></td>{% endif %}
 					<td class="text-right">{{ doc.get_formatted("total") }}</td>
 				</tr>
 				<tr>
@@ -159,6 +174,7 @@
 							{{ doc.get_formatted("additional_discount_percentage") }} &percnt;
 						{% endif %}
 					</td>
+					{% if show_tax_rate_col %}<td></td>{% endif %}
 					<td class="text-right">
 						{{ doc.get_formatted("discount_amount") }}
 					</td>
@@ -170,6 +186,7 @@
 				<td></td>
 				<td></td>
 				<td></td>
+				{% if show_tax_rate_col %}<td></td>{% endif %}
 				<td class="text-right">{{ doc.get_formatted("net_total") }}</td>
 			</tr>
 			{% for tax_row in doc.taxes -%}
@@ -182,6 +199,7 @@
 						<td></td>
 						<td></td>
 						<td></td>
+						{% if show_tax_rate_col %}<td></td>{% endif %}
 						<td class="text-right">
 							{{ tax_row.get_formatted("tax_amount") }}
 						</td>
@@ -192,10 +210,8 @@
 			{% if doc.tax_exemption_reason %}
 				<tr>
 					<td></td>
-					<td>{{ _(doc.tax_exemption_reason) }}</td>
+					<td colspan="{{ 5 if show_tax_rate_col else 4 }}">{{ _(doc.tax_exemption_reason) }}</td>
 					<td></td>
-					<td></td>
-					<td colspan="2"></td>
 				</tr>
 			{% endif %}
 			<tr>
@@ -206,6 +222,7 @@
 				<td></td>
 				<td></td>
 				<td></td>
+				{% if show_tax_rate_col %}<td></td>{% endif %}
 				<td class="text-right"><strong>{{ doc.get_formatted("grand_total") }}</strong>
 				</td>
 			</tr>
@@ -216,6 +233,7 @@
 					<td></td>
 					<td></td>
 					<td></td>
+					{% if show_tax_rate_col %}<td></td>{% endif %}
 					<td class="text-right">
 						{{ doc.get_formatted("total_advance") }}
 					</td>
@@ -226,33 +244,55 @@
 					<td></td>
 					<td></td>
 					<td></td>
+					{% if show_tax_rate_col %}<td></td>{% endif %}
 					<td class="text-right">
 						{{ doc.get_formatted("outstanding_amount") }}
 					</td>
 				</tr>
 			{% endif %}
 			{% if doc.get("custom_invoice_type") == "Final Invoice" and doc.get("custom_down_payments") %}
-				<tr class="prior-down-payments-header">
-					<td></td>
-					<td colspan="5"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
+				{# Nested table: main grid maps Description/Qty/… to different semantics; own colgroup fixes widths. #}
+				<tr class="prior-down-payments-wrap">
+					<td colspan="{{ 7 if show_tax_rate_col else 6 }}" class="prior-down-payments-cell" style="padding-top: 0.35rem;">
+						<table class="w-100 text-small prior-down-payments-subtable" style="table-layout: fixed; width: 100%;">
+							<colgroup>
+								<col style="width: 24%" />
+								<col style="width: 14%" />
+								<col style="width: 20%" />
+								<col style="width: 20%" />
+								<col style="width: 22%" />
+							</colgroup>
+							<tbody>
+								<tr class="prior-down-payments-header">
+									<td colspan="5"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
+								</tr>
+								<tr>
+									<td>{{ _("Invoice No.") }}</td>
+									<td>{{ _("Paid On") }}</td>
+									<td class="text-right">{{ _("Net Amount") }}</td>
+									<td class="text-right">{{ _("Tax Amount") }}</td>
+									<td class="text-right">{{ _("Grand Total") }}</td>
+								</tr>
+								{% for dp in doc.custom_down_payments %}
+									<tr class="prior-down-payment-row">
+										<td>{{ dp.invoice_no }}</td>
+										<td>{% if dp.payment_date %}{{ frappe.utils.formatdate(dp.payment_date, "dd.mm.yyyy") }}{% endif %}</td>
+										<td class="text-right">{{ frappe.utils.fmt_money(dp.net_total, currency=doc.currency) }}</td>
+										<td class="text-right">{{ frappe.utils.fmt_money(dp.tax_amount, currency=doc.currency) }}</td>
+										<td class="text-right">{{ frappe.utils.fmt_money(dp.grand_total, currency=doc.currency) }}</td>
+									</tr>
+								{% endfor %}
+							</tbody>
+						</table>
+					</td>
 				</tr>
-				{% for dp in doc.custom_down_payments %}
-					<tr class="prior-down-payment-row">
-						<td></td>
-						<td>{{ dp.invoice_no }}</td>
-						<td></td>
-						<td></td>
-						<td class="text-right"></td>
-						<td class="text-right">{{ frappe.utils.fmt_money(dp.grand_total, currency=doc.currency) }}</td>
-					</tr>
-				{% endfor %}
 				<tr class="prior-down-payments-outstanding">
-					<td></td>
-					<td><strong>{{ _("Outstanding After Down Payments") }}</strong></td>
-					<td></td>
+					<td colspan="2"><strong>{{ _("Outstanding After Down Payments") }}</strong></td>
 					<td></td>
 					<td></td>
-					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.grand_total, currency=doc.currency) }}</strong></td>
+					<td></td>
+					{% if show_tax_rate_col %}<td></td>{% endif %}
+					<td class="text-right"><strong>{{ frappe.utils.fmt_money(doc.outstanding_amount, currency=doc.currency) }}</strong></td>
 				</tr>
 			{% endif %}
 		</tfoot>
