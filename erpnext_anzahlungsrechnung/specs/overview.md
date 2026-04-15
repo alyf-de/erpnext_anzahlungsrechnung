@@ -8,7 +8,7 @@ This app supports down payment invoices and their matching final invoices with f
 
 The **Sales Invoice** now has one of three different invoice types:
 
-- Invoice -> That is a general invoice, that has no special functions. It acts accoding to ERPNext's standard.
+- Invoice -> That is a general invoice, that has no special functions. It acts according to ERPNext's standard.
 - Down Payment Invoice
 - Final Invoice
 
