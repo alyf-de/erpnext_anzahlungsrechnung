@@ -421,7 +421,11 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		.inner_join(sales_invoice_item)
 		.on(sales_invoice_item.parent == sales_invoice.name)
 		.select(
-			sales_invoice.name, sales_invoice.posting_date, sales_invoice.net_total, sales_invoice.grand_total
+			sales_invoice.name,
+			sales_invoice.posting_date,
+			sales_invoice.net_total,
+			sales_invoice.total_taxes_and_charges,
+			sales_invoice.grand_total,
 		)
 		.where(
 			(sales_invoice_item.sales_order == doc.items[0].sales_order)
@@ -432,6 +436,29 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		.orderby(sales_invoice.posting_date)
 		.orderby(sales_invoice.creation)
 	).run(as_dict=True)
+
+	from frappe.query_builder.functions import Min
+
+	ple = DocType("Payment Ledger Entry")
+	invoice_names = [row.name for row in down_payment_invoices]
+	first_payment_date_by_si = {}
+	if invoice_names:
+		# PLE for receivable: invoice submission increases outstanding (amount > 0); payments and
+		# similar credits reduce it (amount < 0). Earliest posting_date among the latter is the first payment.
+		for row in (
+			frappe.qb.from_(ple)
+			.select(ple.against_voucher_no, Min(ple.posting_date).as_("payment_date"))
+			.where(
+				(ple.against_voucher_type == "Sales Invoice")
+				& (ple.against_voucher_no.isin(invoice_names))
+				& (ple.delinked == 0)
+				& (ple.account_type == "Receivable")
+				& (ple.amount < 0)
+			)
+			.groupby(ple.against_voucher_no)
+		).run(as_dict=True):
+			first_payment_date_by_si[row.against_voucher_no] = row.payment_date
+
 	doc.set("custom_down_payments", [])
 	for down_payment_invoice in down_payment_invoices:
 		doc.append(
@@ -439,7 +466,9 @@ def append_down_payment_invoice_to_final_invoice(doc):
 			{
 				"invoice_no": down_payment_invoice.name,
 				"date": down_payment_invoice.posting_date,
+				"payment_date": first_payment_date_by_si.get(down_payment_invoice.name),
 				"net_total": down_payment_invoice.net_total,
+				"tax_amount": flt(down_payment_invoice.total_taxes_and_charges),
 				"grand_total": down_payment_invoice.grand_total,
 			},
 		)
