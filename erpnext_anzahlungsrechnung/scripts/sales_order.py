@@ -27,7 +27,7 @@ def _avoid_position_discounts_on_down_payment_invoices(doc):
 
 
 @frappe.whitelist()
-def make_sales_invoice_from_sales_order(source_name, target_doc=None, ignore_permissions=False):
+def make_sales_invoice_from_sales_order(source_name, target_doc=None):
 	"""Map Sales Order → Sales Invoice with down payment / final options (dialog args in `frappe.flags.args`)."""
 	frappe.has_permission("Sales Invoice", "create", throw=True)
 
@@ -42,9 +42,7 @@ def make_sales_invoice_from_sales_order(source_name, target_doc=None, ignore_per
 	if so.custom_invoice_type == "Invoice":
 		frappe.throw(_("Use the standard Sales Invoice action for this order."))
 
-	doc = erpnext_make_sales_invoice(
-		source_name, target_doc=target_doc, ignore_permissions=ignore_permissions
-	)
+	doc = erpnext_make_sales_invoice(source_name, target_doc=target_doc, ignore_permissions=False)
 
 	if not create_partial:
 		doc.set("custom_invoice_type", "Final Invoice")
