@@ -70,7 +70,7 @@ After the **Payment Entry** is made against a Down Payment Invoice, following **
 
 - Requested Payment Account is reduced.
 - Taxes are raised (as in the **Sales Invoice**)
-- Received Pre Payments (new account in **Company**, also of root_type Liability) is raised.
+- The `received_down_payment_account` from the matching **Company Down Payment Account** row (configured per income account, and also of root_type Liability) is raised.
 
 ### Automation 3
 
