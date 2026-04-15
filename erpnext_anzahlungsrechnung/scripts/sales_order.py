@@ -112,7 +112,10 @@ def _apply_share_of_total_order_to_items(doc, sales_order_name: str, share_perce
 		if rate:
 			item.qty = flt(target / rate, item.precision("qty"))
 			if getattr(item, "stock_qty", None) is not None:
-				item.stock_qty = flt(item.qty) * flt(item.conversion_factor or 1.0)
+				item.stock_qty = flt(
+					flt(item.qty) * flt(item.conversion_factor or 1.0),
+					item.precision("stock_qty"),
+				)
 		else:
 			item.qty = 0
 		item.amount = target
