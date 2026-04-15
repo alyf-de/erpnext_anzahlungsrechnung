@@ -29,7 +29,7 @@ def _avoid_position_discounts_on_down_payment_invoices(doc):
 @frappe.whitelist()
 def make_sales_invoice_from_sales_order(source_name, target_doc=None, ignore_permissions=False):
 	"""Map Sales Order → Sales Invoice with down payment / final options (dialog args in `frappe.flags.args`)."""
-	frappe.has_permission("Sales Invoice", "create")
+	frappe.has_permission("Sales Invoice", "create", throw=True)
 
 	args = frappe.flags.args or frappe._dict()
 	create_partial = cint(args.get("create_partial", 1))
