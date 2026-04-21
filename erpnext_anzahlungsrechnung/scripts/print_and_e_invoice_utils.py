@@ -44,8 +44,10 @@ def _prepare_final_invoice_data(doc):
 	doc.set("items", sales_order.items)
 	doc.set("taxes", sales_order.taxes)
 	doc.set("item_wise_tax_details", sales_order.item_wise_tax_details)
+	doc.total = sales_order.total
 	doc.net_total = sales_order.net_total
 	doc.grand_total = sales_order.grand_total
+	doc.base_total = sales_order.base_total
 	doc.base_net_total = sales_order.base_net_total
 	doc.base_grand_total = sales_order.base_grand_total
 
