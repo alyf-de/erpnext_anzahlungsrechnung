@@ -6,6 +6,11 @@ from frappe.query_builder import DocType
 from frappe.utils import cint, flt
 from frappe.utils.formatters import format_value
 
+from erpnext_anzahlungsrechnung.scripts.service_period_utils import (
+	get_item_service_period_bounds,
+	sync_standard_period_fields_from_custom,
+	validate_service_period_ranges,
+)
 from erpnext_anzahlungsrechnung.scripts.utils import (
 	aggregate_income_by_account,
 	append_je_row,
@@ -20,9 +25,71 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 
 
 def before_validate(doc, event):
+	_sync_service_period_fields(doc)
+	validate_service_period_ranges(doc)
 	validate_consistent_currency(doc)
 	validate_sales_order_consistency(doc)
 	append_down_payment_invoice_to_final_invoice(doc)
+
+
+def _sync_service_period_fields(doc):
+	_copy_service_period_fields_from_sales_order(doc)
+	_derive_service_period_from_invoice_item_rows(doc)
+	_sync_standard_invoice_period_fields(doc)
+
+
+def _copy_service_period_fields_from_sales_order(doc):
+	if not doc.items:
+		return
+
+	linked_sales_orders = {item.sales_order for item in doc.items if item.sales_order}
+	if len(linked_sales_orders) == 1:
+		sales_order_name = next(iter(linked_sales_orders))
+		so_period = frappe.db.get_value(
+			"Sales Order",
+			sales_order_name,
+			["custom_service_period_from", "custom_service_period_to"],
+			as_dict=True,
+		)
+		if so_period:
+			if not doc.custom_service_period_from and so_period.get("custom_service_period_from"):
+				doc.custom_service_period_from = so_period.get("custom_service_period_from")
+			if not doc.custom_service_period_to and so_period.get("custom_service_period_to"):
+				doc.custom_service_period_to = so_period.get("custom_service_period_to")
+
+	so_detail_names = list({item.so_detail for item in doc.items if item.so_detail})
+	if not so_detail_names:
+		return
+
+	so_items = frappe.get_all(
+		"Sales Order Item",
+		filters={"name": ("in", so_detail_names)},
+		fields=["name", "custom_service_period_from", "custom_service_period_to"],
+	)
+	so_items_by_name = {row.name: row for row in so_items}
+
+	for item in doc.items:
+		if not item.so_detail:
+			continue
+		so_item = so_items_by_name.get(item.so_detail)
+		if not so_item:
+			continue
+		if not item.custom_service_period_from and so_item.get("custom_service_period_from"):
+			item.custom_service_period_from = so_item.get("custom_service_period_from")
+		if not item.custom_service_period_to and so_item.get("custom_service_period_to"):
+			item.custom_service_period_to = so_item.get("custom_service_period_to")
+
+
+def _derive_service_period_from_invoice_item_rows(doc):
+	item_from_date, item_to_date = _get_item_service_period_bounds(doc.items)
+	if item_from_date and not doc.custom_service_period_from:
+		doc.custom_service_period_from = item_from_date
+	if item_to_date and not doc.custom_service_period_to:
+		doc.custom_service_period_to = item_to_date
+
+
+def _sync_standard_invoice_period_fields(doc):
+	sync_standard_period_fields_from_custom(doc)
 
 
 def validate(doc, event):

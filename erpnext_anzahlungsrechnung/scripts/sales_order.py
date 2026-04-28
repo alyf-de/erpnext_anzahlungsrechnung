@@ -43,6 +43,7 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		frappe.throw(_("Use the standard Sales Invoice action for this order."))
 
 	doc = erpnext_make_sales_invoice(source_name, target_doc=target_doc, ignore_permissions=False)
+	_apply_service_period_fields_to_sales_invoice(doc, so)
 
 	if not create_partial:
 		doc.set("custom_invoice_type", "Final Invoice")
@@ -61,6 +62,23 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		doc.run_method("calculate_taxes_and_totals")
 
 	return doc
+
+
+def _apply_service_period_fields_to_sales_invoice(doc, sales_order):
+	if not doc.custom_service_period_from and sales_order.custom_service_period_from:
+		doc.custom_service_period_from = sales_order.custom_service_period_from
+	if not doc.custom_service_period_to and sales_order.custom_service_period_to:
+		doc.custom_service_period_to = sales_order.custom_service_period_to
+
+	so_items_by_name = {row.name: row for row in sales_order.items}
+	for item in doc.items:
+		so_item = so_items_by_name.get(item.so_detail) if item.so_detail else None
+		if not so_item:
+			continue
+		if not item.custom_service_period_from and so_item.custom_service_period_from:
+			item.custom_service_period_from = so_item.custom_service_period_from
+		if not item.custom_service_period_to and so_item.custom_service_period_to:
+			item.custom_service_period_to = so_item.custom_service_period_to
 
 
 def _apply_share_of_total_order_to_items(doc, sales_order_name: str, share_percent: float):

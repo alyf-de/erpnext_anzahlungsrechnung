@@ -61,17 +61,24 @@
 				</tr>
 			{% endif %}
 
-			{% if doc.from_date and doc.to_date %}
+			{% set performance_from = doc.custom_service_period_from or doc.from_date %}
+			{% set performance_to = doc.custom_service_period_to or doc.to_date %}
+			{% if performance_from and performance_to %}
 				<tr>
 					<td>{{ _("Performance Period") }}:</td>
 					{# If the year matches (first 4 chars in ISO-string), omit it for from_date #}
-					{% if doc.from_date.year is defined %}
-					{% set date_format = "dd.mm." if doc.from_date.year == doc.to_date.year else "dd.mm.yy" %}
+					{% if performance_from.year is defined %}
+					{% set date_format = "dd.mm." if performance_from.year == performance_to.year else "dd.mm.yy" %}
 					{% else %}
-					{% set date_format = "dd.mm." if doc.from_date[:4] == doc.to_date[:4] else "dd.mm.yy" %}
+					{% set date_format = "dd.mm." if performance_from[:4] == performance_to[:4] else "dd.mm.yy" %}
 					{% endif %}
-					<td class="text-right">{{ frappe.utils.formatdate(doc.from_date, date_format) }} - {{
-						frappe.utils.formatdate(doc.to_date, "dd.mm.yyyy") }}</td>
+					<td class="text-right">{{ frappe.utils.formatdate(performance_from, date_format) }} - {{
+						frappe.utils.formatdate(performance_to, "dd.mm.yyyy") }}</td>
+				</tr>
+			{% elif performance_from %}
+				<tr>
+					<td>{{ _("Performance Period") }}:</td>
+					<td class="text-right">{{ frappe.utils.formatdate(performance_from, "MMMM yyyy") }}</td>
 				</tr>
 			{% endif %}
 		</table>
@@ -147,7 +154,27 @@
 				</tr>
 				<tr>
 					<td></td>
-					<td colspan="{{ 5 if show_tax_rate_col else 4 }}">{{ n.description }}</td>
+					<td colspan="{{ 5 if show_tax_rate_col else 4 }}">
+						{{ n.description }}
+						{% if n.custom_service_period_from and n.custom_service_period_to %}
+							<br>
+							<span class="text-small">
+								{{ _("Performance Period") }}:
+								{% if n.custom_service_period_from.year is defined %}
+									{% set item_date_format = "dd.mm." if n.custom_service_period_from.year == n.custom_service_period_to.year else "dd.mm.yy" %}
+								{% else %}
+									{% set item_date_format = "dd.mm." if n.custom_service_period_from[:4] == n.custom_service_period_to[:4] else "dd.mm.yy" %}
+								{% endif %}
+								{{ frappe.utils.formatdate(n.custom_service_period_from, item_date_format) }} - {{
+									frappe.utils.formatdate(n.custom_service_period_to, "dd.mm.yyyy") }}
+							</span>
+						{% elif n.custom_service_period_from %}
+							<br>
+							<span class="text-small">
+								{{ _("Performance Period") }}: {{ frappe.utils.formatdate(n.custom_service_period_from, "MMMM yyyy") }}
+							</span>
+						{% endif %}
+					</td>
 					<td></td>
 				</tr>
 			{% endfor %}

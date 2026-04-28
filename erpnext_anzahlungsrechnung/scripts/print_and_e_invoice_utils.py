@@ -2,9 +2,13 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from erpnext_anzahlungsrechnung.scripts.service_period_utils import (
+	sync_standard_period_fields_from_custom,
+)
 
 def before_print(doc, method, print_settings):
 	prepare_invoice_data_according_to_invoice_type(doc)
+	_sync_service_period_fields_for_print(doc)
 
 
 def prepare_invoice_data_according_to_invoice_type(doc):
@@ -44,12 +48,20 @@ def _prepare_final_invoice_data(doc):
 	doc.set("items", sales_order.items)
 	doc.set("taxes", sales_order.taxes)
 	doc.set("item_wise_tax_details", sales_order.item_wise_tax_details)
+	if not doc.custom_service_period_from and sales_order.custom_service_period_from:
+		doc.custom_service_period_from = sales_order.custom_service_period_from
+	if not doc.custom_service_period_to and sales_order.custom_service_period_to:
+		doc.custom_service_period_to = sales_order.custom_service_period_to
 	doc.total = sales_order.total
 	doc.net_total = sales_order.net_total
 	doc.grand_total = sales_order.grand_total
 	doc.base_total = sales_order.base_total
 	doc.base_net_total = sales_order.base_net_total
 	doc.base_grand_total = sales_order.base_grand_total
+
+
+def _sync_service_period_fields_for_print(doc):
+	sync_standard_period_fields_from_custom(doc)
 
 
 def _add_tax_rates_to_items(doc):

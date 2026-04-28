@@ -93,6 +93,38 @@ def get_custom_fields():
 				"read_only": 1,
 				"no_copy": 1,
 			},
+			{
+				"fieldname": "custom_service_period_section",
+				"label": "Service Period",
+				"fieldtype": "Section Break",
+				"insert_after": "custom_down_payments",
+			},
+			{
+				"fieldname": "custom_service_period_from",
+				"label": "Service Period From",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_section",
+			},
+			{
+				"fieldname": "custom_service_period_to",
+				"label": "Service Period To",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_from",
+			},
+		],
+		"Sales Invoice Item": [
+			{
+				"fieldname": "custom_service_period_from",
+				"label": "Service Period From",
+				"fieldtype": "Date",
+				"insert_after": "so_detail",
+			},
+			{
+				"fieldname": "custom_service_period_to",
+				"label": "Service Period To",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_from",
+			},
 		],
 		"Sales Order": [
 			{
@@ -105,6 +137,42 @@ def get_custom_fields():
 				"reqd": 1,
 				"allow_on_submit": 1,
 				"read_only_depends_on": "eval: doc.per_billed > 0",
+			},
+			{
+				"fieldname": "custom_service_period_section",
+				"label": "Service Period",
+				"fieldtype": "Section Break",
+				"insert_after": "custom_invoice_type",
+			},
+			{
+				"fieldname": "custom_service_period_from",
+				"label": "Service Period From",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_section",
+				"allow_on_submit": 1,
+			},
+			{
+				"fieldname": "custom_service_period_to",
+				"label": "Service Period To",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_from",
+				"allow_on_submit": 1,
+			},
+		],
+		"Sales Order Item": [
+			{
+				"fieldname": "custom_service_period_from",
+				"label": "Service Period From",
+				"fieldtype": "Date",
+				"insert_after": "delivery_date",
+				"allow_on_submit": 1,
+			},
+			{
+				"fieldname": "custom_service_period_to",
+				"label": "Service Period To",
+				"fieldtype": "Date",
+				"insert_after": "custom_service_period_from",
+				"allow_on_submit": 1,
 			},
 		],
 	}
