@@ -5,6 +5,7 @@ from frappe.utils import flt
 from erpnext_anzahlungsrechnung.scripts.service_period_utils import (
 	sync_standard_period_fields_from_custom,
 )
+from erpnext_anzahlungsrechnung.scripts.utils import get_down_payment_summary_item_label
 
 def before_print(doc, method, print_settings):
 	prepare_invoice_data_according_to_invoice_type(doc)
@@ -25,12 +26,13 @@ def _prepare_down_payment_invoice_data(doc):
 	if not doc.custom_summarize_positions or not doc.custom_down_payment_invoice_description:
 		_add_tax_rates_to_items(doc)
 	else:
+		item_label = get_down_payment_summary_item_label(doc.company)
 		doc.set("items", [])
 		doc.append(
 			"items",
 			{
 				"item_code": "",
-				"item_name": _("Down Payment"),
+				"item_name": item_label,
 				"description": doc.custom_down_payment_invoice_description,
 				"qty": 1,
 				"rate": doc.net_total,

@@ -3,6 +3,8 @@ from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice a
 from frappe import _
 from frappe.utils import cint, flt
 
+from erpnext_anzahlungsrechnung.scripts.utils import build_down_payment_summary_description
+
 
 def before_validate(doc, event):
 	_avoid_position_discounts_on_down_payment_invoices(doc)
@@ -57,7 +59,7 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		_apply_share_of_total_order_to_items(doc, source_name, share)
 		doc.set(
 			"custom_down_payment_invoice_description",
-			_("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(flt(share, 2)),
+			build_down_payment_summary_description(so.company, share),
 		)
 		doc.run_method("calculate_taxes_and_totals")
 

@@ -34,6 +34,20 @@ def get_custom_fields():
 				"options": "Company Down Payment Account",
 				"description": "Down Payment Accounts for different tax rates.",
 			},
+			{
+				"fieldname": "custom_down_payment_summary_item_label",
+				"label": "Down Payment Summary Item Label",
+				"fieldtype": "Data",
+				"insert_after": "custom_down_payment_accounts",
+				"description": "Item label for summarized down payment invoices.",
+			},
+			{
+				"fieldname": "custom_down_payment_summary_description_template",
+				"label": "Down Payment Summary Description Template",
+				"fieldtype": "Small Text",
+				"insert_after": "custom_down_payment_summary_item_label",
+				"description": "Default description for summarized down payment invoices. Use {share_percent} for the billed share.",
+			},
 		],
 		"Journal Entry": [
 			{

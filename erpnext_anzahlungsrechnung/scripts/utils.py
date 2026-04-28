@@ -4,6 +4,11 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt
 
+DEFAULT_DOWN_PAYMENT_SUMMARY_ITEM_LABEL = "Down Payment"
+DEFAULT_DOWN_PAYMENT_SUMMARY_DESCRIPTION_TEMPLATE = (
+	"Es werden {share_percent} % des Gesamtauftragswerts in Rechnung gestellt."
+)
+
 
 def require_requested_payments_account(company):
 	"""Ensure Company has Requested Payments account set."""
@@ -15,6 +20,60 @@ def require_requested_payments_account(company):
 
 def get_requested_payments_account(company):
 	return frappe.db.get_value("Company", company, "custom_requested_payments_account")
+
+
+def get_down_payment_summary_item_label(company):
+	settings = _get_down_payment_summary_text_settings(company)
+	return settings["item_label"]
+
+
+def build_down_payment_summary_description(company, share_percent):
+	settings = _get_down_payment_summary_text_settings(company)
+	template = settings["description_template"]
+	return _render_share_template(template, share_percent)
+
+
+def _get_down_payment_summary_text_settings(company):
+	company_row = frappe.db.get_value(
+		"Company",
+		company,
+		[
+			"custom_down_payment_summary_item_label",
+			"custom_down_payment_summary_description_template",
+		],
+		as_dict=True,
+	)
+	company_row = company_row or {}
+
+	item_label = (company_row.get("custom_down_payment_summary_item_label") or "").strip()
+	description_template = (
+		(company_row.get("custom_down_payment_summary_description_template") or "").strip()
+	)
+
+	return {
+		"item_label": item_label or _(DEFAULT_DOWN_PAYMENT_SUMMARY_ITEM_LABEL),
+		"description_template": description_template
+		or _(DEFAULT_DOWN_PAYMENT_SUMMARY_DESCRIPTION_TEMPLATE),
+	}
+
+
+def _render_share_template(template, share_percent):
+	share_value = flt(share_percent, 2)
+	share_text = str(share_value)
+
+	if "{share_percent}" in template:
+		return template.replace("{share_percent}", share_text)
+
+	if "{0}" in template or "{}" in template:
+		try:
+			return template.format(share_text)
+		except (IndexError, KeyError, ValueError):
+			return template
+
+	try:
+		return template.format(share_percent=share_text)
+	except (IndexError, KeyError, ValueError):
+		return template
 
 
 def get_company_down_payment_map(company):

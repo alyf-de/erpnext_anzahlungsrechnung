@@ -9,3 +9,4 @@ execute:from erpnext_anzahlungsrechnung.install import make_property_setters; ma
 erpnext_anzahlungsrechnung.patches.create_sales_invoice_print_format # 2026-04-15 #6
 erpnext_anzahlungsrechnung.patches.add_service_period_custom_fields # 2026-04-27 #7 service period fields
 erpnext_anzahlungsrechnung.patches.refresh_sales_invoice_print_format_for_service_period # 2026-04-27 #8
+erpnext_anzahlungsrechnung.patches.add_down_payment_summary_text_config_fields # 2026-04-28 #9
