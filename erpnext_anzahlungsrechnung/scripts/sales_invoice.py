@@ -81,7 +81,7 @@ def _copy_service_period_fields_from_sales_order(doc):
 
 
 def _derive_service_period_from_invoice_item_rows(doc):
-	item_from_date, item_to_date = _get_item_service_period_bounds(doc.items)
+	item_from_date, item_to_date = get_item_service_period_bounds(doc.items)
 	if item_from_date and not doc.custom_service_period_from:
 		doc.custom_service_period_from = item_from_date
 	if item_to_date and not doc.custom_service_period_to:
