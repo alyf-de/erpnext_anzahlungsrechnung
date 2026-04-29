@@ -107,6 +107,7 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	dpi.customer = so.customer
 	dpi.company = so.company
 	dpi.posting_date = today()
+	dpi.total_sales_order_amount = flt(so.grand_total)
 	precision = frappe.get_precision("Down Payment Invoice", "down_payment_amount") or 2
 	dpi.down_payment_percentage = share
 	dpi.down_payment_amount = flt(flt(so.grand_total) * share / 100.0, precision)
