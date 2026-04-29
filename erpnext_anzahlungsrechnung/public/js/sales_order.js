@@ -26,9 +26,7 @@ function show_down_payment_sales_invoice_dialog(frm) {
 
 	function refresh_visibility() {
 		const partial = partial_locked || dialog.get_value("create_partial");
-		const summarize = partial && dialog.get_value("summarize_positions");
-		dialog.set_df_property("summarize_positions", "hidden", !partial);
-		dialog.set_df_property("share_percent", "hidden", !(partial && summarize));
+		dialog.set_df_property("share_percent", "hidden", !partial);
 	}
 
 	dialog = new frappe.ui.Dialog({
@@ -50,13 +48,6 @@ function show_down_payment_sales_invoice_dialog(frm) {
 				onchange: refresh_visibility,
 			},
 			{
-				fieldname: "summarize_positions",
-				fieldtype: "Check",
-				label: __("Summarize Positions on Print"),
-				default: 1,
-				onchange: refresh_visibility,
-			},
-			{
 				fieldname: "share_percent",
 				fieldtype: "Float",
 				label: __("Bill This Share of Total Order (%)"),
@@ -66,10 +57,9 @@ function show_down_payment_sales_invoice_dialog(frm) {
 		primary_action_label: __("Create"),
 		primary_action(values) {
 			const create_partial = partial_locked ? 1 : values.create_partial ? 1 : 0;
-			const summarize_positions = create_partial ? (values.summarize_positions ? 1 : 0) : 0;
 			const share_percent = flt(values.share_percent);
 
-			if (create_partial && summarize_positions) {
+			if (create_partial) {
 				if (share_percent <= 0 || share_percent >= 100) {
 					frappe.throw(__("Bill share (%) must be greater than 0 and less than 100."));
 				}
@@ -80,8 +70,7 @@ function show_down_payment_sales_invoice_dialog(frm) {
 				frm: frm,
 				args: {
 					create_partial,
-					summarize_positions,
-					share_percent: summarize_positions ? share_percent : 100,
+					share_percent,
 				},
 				freeze: true,
 				freeze_message: __("Creating Down Payment Invoice ..."),

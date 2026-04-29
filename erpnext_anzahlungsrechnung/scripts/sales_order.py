@@ -31,7 +31,6 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
 	args = frappe.flags.args or frappe._dict()
 	create_partial = cint(args.get("create_partial", 1))
-	summarize = cint(args.get("summarize_positions", 1))
 	share = flt(args.get("share_percent", 100))
 
 	so = frappe.get_doc("Sales Order", source_name)
@@ -47,8 +46,6 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		return doc
 
 	frappe.has_permission("Down Payment Invoice", "create", throw=True)
-	if not summarize:
-		frappe.throw(_("Summarize Positions must be enabled to create a Down Payment Invoice."))
 	if not (0 < share < 100):
 		frappe.throw(_("Bill share (%) must be greater than 0 and less than 100."))
 
