@@ -83,7 +83,7 @@
 <div id="faltmarke-2" class="din-mark"></div>
 
 <!-- CONTENT -->
-{% set show_tax_rate_col = not (doc.get("custom_invoice_type") == "Down Payment Invoice" and doc.get("custom_summarize_positions")) %}
+{% set show_tax_rate_col = true %}
 <div id="text">
 	<div id="subject">
 		{% if doc.is_return %}
@@ -93,9 +93,7 @@
 			<p><strong>{{ _("Cancellation Invoice") }} {{ doc.name }}</strong></p>
 			<p class="text-small">{{ _("Fully cancels and replaces invoice {0}").format(doc.amended_from) }}</p>
 		{% else %}
-			{% if doc.get("custom_invoice_type") == "Down Payment Invoice" %}
-				<p><strong>{{ _("Down Payment Invoice") }} {{ doc.name }}</strong></p>
-			{% elif doc.get("custom_invoice_type") == "Final Invoice" %}
+			{% if doc.get("custom_invoice_type") == "Final Invoice" %}
 				<p><strong>{{ _("Final Invoice") }} {{ doc.name }}</strong></p>
 			{% else %}
 				<p><strong>{{ _("Invoice") }} {{ doc.name }}</strong></p>

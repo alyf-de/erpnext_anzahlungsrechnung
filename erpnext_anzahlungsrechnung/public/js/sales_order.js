@@ -84,7 +84,7 @@ function show_down_payment_sales_invoice_dialog(frm) {
 					share_percent: summarize_positions ? share_percent : 100,
 				},
 				freeze: true,
-				freeze_message: __("Creating Sales Invoice ..."),
+				freeze_message: __("Creating Down Payment Invoice ..."),
 			});
 			dialog.hide();
 		},

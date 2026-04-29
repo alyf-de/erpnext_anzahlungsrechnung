@@ -146,6 +146,7 @@ def insert_and_submit_je(
 	*,
 	sales_invoice=None,
 	payment_entry=None,
+	down_payment_invoice=None,
 ):
 	"""Build a Journal Entry with down-payment trace links, insert and submit."""
 	je = frappe.get_doc(
@@ -159,6 +160,7 @@ def insert_and_submit_je(
 			"accounts": accounts,
 			"custom_dp_sales_invoice": sales_invoice,
 			"custom_dp_payment_entry": payment_entry,
+			"custom_dp_down_payment_invoice": down_payment_invoice,
 		}
 	)
 	je.insert()

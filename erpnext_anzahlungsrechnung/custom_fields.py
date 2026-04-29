@@ -56,6 +56,16 @@ def get_custom_fields():
 				"allow_on_submit": 1,
 				"no_copy": 1,
 			},
+			{
+				"fieldname": "custom_dp_down_payment_invoice",
+				"label": "Down Payment Invoice",
+				"fieldtype": "Link",
+				"insert_after": "custom_dp_payment_entry",
+				"options": "Down Payment Invoice",
+				"read_only": 1,
+				"allow_on_submit": 1,
+				"no_copy": 1,
+			},
 		],
 		"Sales Invoice": [
 			{
@@ -63,7 +73,7 @@ def get_custom_fields():
 				"label": "Invoice Type",
 				"fieldtype": "Select",
 				"insert_after": "posting_date",
-				"options": "Invoice\nDown Payment Invoice\nFinal Invoice",
+				"options": "Invoice\nFinal Invoice",
 				"default": "Invoice",
 				"reqd": 1,
 				"read_only_depends_on": "eval: !doc.__islocal;",

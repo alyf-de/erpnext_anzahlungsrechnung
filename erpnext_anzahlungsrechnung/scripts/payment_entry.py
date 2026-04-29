@@ -2,10 +2,13 @@ from collections import defaultdict
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import flt
 
+from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
+	aggregate_tax_amounts_for_down_payment_invoice,
+	get_income_tax_totals_for_down_payment_invoice,
+)
 from erpnext_anzahlungsrechnung.scripts.utils import (
-	aggregate_income_by_account,
 	append_je_row,
 	default_cost_center,
 	get_company_down_payment_map,
@@ -24,13 +27,14 @@ def on_submit(doc, event):
 
 
 def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
-	"""For each allocated Down Payment Sales Invoice: debit Requested Payments, credit tax accounts and Received Down Payment accounts (net/tax split)."""
+	"""For each allocated **Down Payment Invoice**: debit Requested Payments, credit tax and Received Down Payment accounts."""
 	ref_rows = []
 	for d in pe.get("references") or []:
-		if d.reference_doctype != "Sales Invoice" or not d.reference_name or not flt(d.allocated_amount):
-			continue
-		inv_type = frappe.db.get_value("Sales Invoice", d.reference_name, "custom_invoice_type")
-		if inv_type != "Down Payment Invoice":
+		if (
+			d.reference_doctype != "Down Payment Invoice"
+			or not d.reference_name
+			or not flt(d.allocated_amount)
+		):
 			continue
 		ref_rows.append(d)
 
@@ -44,8 +48,8 @@ def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
 	ref_type, ref_name = "Payment Entry", pe.name
 
 	for d in ref_rows:
-		si = frappe.get_doc("Sales Invoice", d.reference_name)
-		income_totals, _cc, _proj = aggregate_income_by_account(si)
+		dpi = frappe.get_doc("Down Payment Invoice", d.reference_name)
+		income_totals, _tax_totals, _icc, _ipr, _tcc = get_income_tax_totals_for_down_payment_invoice(dpi)
 		require_down_payment_accounts_for_income(pe.company, income_totals.keys())
 		dp_map = get_company_down_payment_map(pe.company)
 
@@ -53,30 +57,20 @@ def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
 		if not alloc_base:
 			continue
 
-		base_net = flt(si.base_net_total)
-		base_grand = flt(si.base_grand_total)
+		base_net = flt(sum(income_totals.values()))
+		base_grand = flt(dpi.down_payment_amount)
 		if not base_grand:
 			continue
 
 		net_portion = flt(alloc_base * base_net / base_grand, 2)
 		tax_pool = flt(alloc_base - net_portion, 2)
 
-		enable_discount_accounting = cint(
-			frappe.get_single_value("Selling Settings", "enable_discount_accounting")
-		)
-		tax_amounts = []
-		total_tax_base = 0.0
-		for tax in si.get("taxes") or []:
-			if not flt(tax.base_tax_amount_after_discount_amount):
-				continue
-			_tax_amt, base_amt = si.get_tax_amounts(tax, enable_discount_accounting)
-			tax_amounts.append((tax.account_head, flt(base_amt), tax.cost_center))
-			total_tax_base += flt(base_amt)
-
+		tax_amounts = aggregate_tax_amounts_for_down_payment_invoice(dpi)
 		tax_splits = defaultdict(float)
+		total_tax_base = sum(flt(a[1]) for a in tax_amounts)
 		if total_tax_base > 0 and tax_pool:
 			for acc, base_amt, cc in tax_amounts:
-				part = flt(tax_pool * base_amt / total_tax_base, 2)
+				part = flt(tax_pool * flt(base_amt) / total_tax_base, 2)
 				tax_splits[(acc, cc or "")] += part
 		sum_tax = sum(tax_splits.values())
 		if tax_splits and abs(sum_tax - tax_pool) > 0.01:
@@ -137,14 +131,15 @@ def post_receipt_clearing_journal_for_down_payment_invoices(pe) -> str | None:
 			)
 		)
 
-	first_si = ref_rows[0].reference_name
+	first_dpi = ref_rows[0].reference_name
 	je = insert_and_submit_je(
 		pe.company,
 		pe.posting_date,
 		rows,
 		_("Down payment receipt clearing for {0}").format(pe.name),
 		_("Down Payment Receipt Clearing"),
-		sales_invoice=first_si,
+		sales_invoice=None,
 		payment_entry=pe.name,
+		down_payment_invoice=first_dpi,
 	)
 	return je.name

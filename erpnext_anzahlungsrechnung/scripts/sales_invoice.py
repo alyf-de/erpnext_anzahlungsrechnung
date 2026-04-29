@@ -1,21 +1,23 @@
-from collections import defaultdict
-
 import frappe
 from frappe import _
 from frappe.query_builder import DocType
+from frappe.query_builder.functions import Min
 from frappe.utils import cint, flt
 from frappe.utils.formatters import format_value
 
+from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
+	get_down_payment_net_total,
+	get_income_tax_totals_for_down_payment_invoice,
+	neutralization_journal_exists_for_down_payment_invoice,
+)
 from erpnext_anzahlungsrechnung.scripts.utils import (
 	aggregate_income_by_account,
 	append_je_row,
 	default_cost_center,
 	get_company_down_payment_map,
-	get_requested_payments_account,
 	insert_and_submit_je,
 	merge_je_account_rows,
 	require_down_payment_accounts_for_income,
-	require_requested_payments_account,
 )
 
 
@@ -31,7 +33,7 @@ def validate(doc, event):
 		return
 	if cint(doc.get("is_pos")):
 		return
-	if doc.custom_invoice_type not in ("Down Payment Invoice", "Final Invoice"):
+	if doc.custom_invoice_type != "Final Invoice":
 		return
 	_validate_company_down_payment_accounts(doc)
 
@@ -102,7 +104,7 @@ def _validate_company_down_payment_accounts(doc):
 
 
 def on_submit(doc, event):
-	"""Post journal entries for down payment / final invoice flows (neutralization, prepayment recognition, return reversals)."""
+	"""Post journal entries for final invoice flows (prepayment recognition, return reversals)."""
 	if doc.is_consolidated or doc.is_internal_transfer():
 		return
 	if cint(doc.get("is_pos")):
@@ -110,23 +112,11 @@ def on_submit(doc, event):
 
 	if doc.is_return and doc.return_against:
 		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
-		if orig_type == "Down Payment Invoice":
-			pes = get_submitted_payment_entries_against_si(doc.return_against)
-			if pes:
-				frappe.throw(
-					_("Cancel Payment Entries against {0} before this return: {1}").format(
-						doc.return_against,
-						", ".join(pes),
-					)
-				)
-			post_neutralization_reversal_journal_for_down_payment_credit_note(doc)
-		elif orig_type == "Final Invoice":
+		if orig_type == "Final Invoice":
 			post_prepayment_reversal_journal_for_final_invoice_credit_note(doc)
 		return
 
-	if doc.custom_invoice_type == "Down Payment Invoice":
-		post_neutralization_journal_for_down_payment_invoice(doc)
-	elif doc.custom_invoice_type == "Final Invoice":
+	if doc.custom_invoice_type == "Final Invoice":
 		post_prepayment_recognition_journal_for_final_invoice(doc)
 
 
@@ -134,9 +124,9 @@ def validate_consistent_currency(doc):
 	"""
 	Ensure the currency of the Sales Invoice is consistent with the currencies of:
 	Sales Order, Taxes and Income Accounts, Sales Invoice Currency, Debit To Currency.
-	This validation only runs for Down Payment Invoices and Final Invoices.
+	This validation only runs for Final Invoices.
 	"""
-	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
+	if doc.custom_invoice_type != "Final Invoice":
 		return
 
 	so_currency = frappe.db.get_value("Sales Order", doc.items[0].sales_order, "currency")
@@ -188,23 +178,15 @@ def validate_sales_order_consistency(doc):
 
 	if doc.return_against:
 		_ensure_invoice_type_consistency_for_returns(doc.return_against, doc.custom_invoice_type)
-		_avoid_returns_against_finished_down_payment_invoices(doc)
 		_validate_updation_of_sales_order_billed_amount(
 			doc.custom_invoice_type, doc.update_billed_amount_in_sales_order
 		)
 
-	if doc.custom_invoice_type in ["Down Payment Invoice", "Final Invoice"]:
+	if doc.custom_invoice_type == "Final Invoice":
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_prevent_position_discounts(doc)
-
-	if doc.custom_invoice_type == "Down Payment Invoice":
-		_validate_down_payment_invoice_billing_limits(doc)
-		_prevent_additional_discounts(doc)
-
-	if doc.custom_invoice_type == "Final Invoice":
 		_ensure_final_invoice_completes_sales_order_positions(doc)
-		_validate_sum_of_invoices_against_sales_order(doc)
 
 
 def _avoid_invoice_type_inconsistencies(invoice_type, items):
@@ -227,26 +209,12 @@ def _ensure_invoice_type_consistency_for_returns(return_against, invoice_type):
 		frappe.throw(_("The Invoice Type of the Return must match the Invoice Type of the original Invoice."))
 
 
-def _avoid_returns_against_finished_down_payment_invoices(doc):
-	"""Block returns once a down-payment-invoice Sales Order is fully billed."""
-	if doc.custom_invoice_type != "Down Payment Invoice":
-		return
-
-	sales_order_per_billed = frappe.db.get_value("Sales Order", doc.items[0].sales_order, "per_billed")
-	if sales_order_per_billed >= 100:
-		frappe.throw(
-			_(
-				"This Down Payment Invoice has already been fully invoiced. No returns are allowed to avoid inconsistencies with Final Invoice."
-			)
-		)
-
-
 def _validate_updation_of_sales_order_billed_amount(invoice_type, update_billed_amount):
-	"""Require billed amount updates for down-payment/final invoice flows."""
-	if invoice_type in ["Down Payment Invoice", "Final Invoice"] and not update_billed_amount:
+	"""Require billed amount updates for final invoice returns."""
+	if invoice_type == "Final Invoice" and not update_billed_amount:
 		frappe.throw(
 			_(
-				"The Sales Order Billed Amount must be updated if it's a Down Payment Invoice or Final Invoice. Please activate the checkbox."
+				"The Sales Order Billed Amount must be updated if it's a Final Invoice return. Please activate the checkbox."
 			)
 		)
 
@@ -258,64 +226,19 @@ def _ensure_sales_order_is_linked(items):
 
 
 def _ensure_only_one_linked_sales_order(items):
-	"""Ensure down-payment/final invoices reference exactly one Sales Order."""
+	"""Ensure final invoices reference exactly one Sales Order."""
 	if len({item.sales_order for item in items}) > 1:
-		frappe.throw(_("Down Payment Invoices or Final Invoices can only process a single Sales Order."))
-
-
-def _validate_down_payment_invoice_billing_limits(doc):
-	"""Prevent down payment invoices from overbilling or fully closing all order rows."""
-	so_positions = {
-		item["name"]: item
-		for item in frappe.get_all(
-			"Sales Order Item",
-			filters={"parent": doc.items[0].sales_order},
-			fields=["name", "idx", "item_name", "item_code", "amount", "billed_amt"],
-		)
-	}
-
-	for invoice_item in doc.items:
-		so_positions[invoice_item.so_detail]["billed_amt"] += invoice_item.amount
-
-	if all(round(so_pos["billed_amt"], 2) >= round(so_pos["amount"], 2) for so_pos in so_positions.values()):
-		frappe.throw(
-			_(
-				"This Down Payment Invoice tries to complete all positions of the Sales Order. At least one position must remain open."
-			)
-		)
-
-	for so_pos in so_positions.values():
-		if round(so_pos["billed_amt"], 2) > round(so_pos["amount"], 2):
-			frappe.throw(
-				_(
-					"This Down Payment Invoice tries to overbill following Sales Order Position:<br><br>#{0} | {1}: {2} | Order Amount: {3}"
-				).format(
-					so_pos["idx"],
-					so_pos["item_code"],
-					so_pos["item_name"],
-					format_value(so_pos["amount"], "Currency", doc.currency),
-				)
-			)
+		frappe.throw(_("Final Invoices can only process a single Sales Order."))
 
 
 def _prevent_position_discounts(doc):
-	"""Disallow position discounts on down payment or final invoices."""
+	"""Disallow position discounts on final invoices."""
 	if any(item.discount_percentage for item in doc.items):
-		frappe.throw(_("Position Discounts are not allowed for Down Payment Invoices or Final Invoices."))
-
-
-def _prevent_additional_discounts(doc):
-	"""Disallow additional discount amount on down payment invoices."""
-	if doc.discount_amount:
-		frappe.throw(
-			_(
-				"Additional discounts are not allowed for Down Payment Invoices. You can add them later to the Final Invoice."
-			)
-		)
+		frappe.throw(_("Position Discounts are not allowed for Final Invoices."))
 
 
 def _ensure_final_invoice_completes_sales_order_positions(doc):
-	"""Require final invoice to fully settle every Sales Order position."""
+	"""Require this final invoice to bill every **Sales Order** line to 100% (remaining + this invoice = line amount)."""
 	so_positions = {
 		position["name"]: position
 		for position in frappe.get_all(
@@ -364,92 +287,33 @@ def _ensure_final_invoice_completes_sales_order_positions(doc):
 		frappe.throw(error_message)
 
 
-def _validate_sum_of_invoices_against_sales_order(doc):
-	"""Validate submitted invoice totals equal the linked Sales Order total."""
-	from frappe.query_builder.functions import Sum
-
-	sales_order = doc.items[0].sales_order
-	sales_invoice = DocType("Sales Invoice")
-	sales_invoice_item = DocType("Sales Invoice Item")
-
-	invoice_names = (
-		frappe.qb.from_(sales_invoice_item)
-		.select(sales_invoice_item.parent)
-		.where(sales_invoice_item.sales_order == sales_order)
-		.distinct()
-	).run(pluck=True)
-
-	if not invoice_names:
-		frappe.throw(
-			_(
-				"No Invoices found for this Sales Order. You can't create a Final Invoice. Consider using 'normal' Invoices or creating Down Payment Invoices before creating a Final Invoice."
-			)
-		)
-
-	invoiced_amount = (
-		frappe.qb.from_(sales_invoice)
-		.select(Sum(sales_invoice.net_total))
-		.where(
-			(sales_invoice.docstatus == 1)
-			& (sales_invoice.name != doc.name)
-			& (sales_invoice.name.isin(invoice_names))
-		)
-	).run()[0][0] or 0
-	invoiced_amount += doc.net_total
-
-	sales_order_amount = frappe.db.get_value("Sales Order", sales_order, "net_total")
-	if abs(invoiced_amount - sales_order_amount) > 0.01:
-		frappe.throw(
-			_(
-				"The sum of the Invoices ({0}) for this Sales Order is not equal to the Sales Order amount ({1})."
-			).format(
-				format_value(invoiced_amount, "Currency", doc.currency),
-				format_value(sales_order_amount, "Currency", doc.currency),
-			)
-		)
-
-
 def append_down_payment_invoice_to_final_invoice(doc):
 	if doc.custom_invoice_type != "Final Invoice":
 		return
 
-	sales_invoice = DocType("Sales Invoice")
-	sales_invoice_item = DocType("Sales Invoice Item")
+	dpi = DocType("Down Payment Invoice")
 
 	down_payment_invoices = (
-		frappe.qb.from_(sales_invoice)
-		.inner_join(sales_invoice_item)
-		.on(sales_invoice_item.parent == sales_invoice.name)
+		frappe.qb.from_(dpi)
 		.select(
-			sales_invoice.name,
-			sales_invoice.posting_date,
-			sales_invoice.net_total,
-			sales_invoice.total_taxes_and_charges,
-			sales_invoice.grand_total,
+			dpi.name,
+			dpi.posting_date,
+			dpi.down_payment_amount,
 		)
-		.where(
-			(sales_invoice_item.sales_order == doc.items[0].sales_order)
-			& (sales_invoice.docstatus == 1)
-			& (sales_invoice.custom_invoice_type == "Down Payment Invoice")
-		)
-		.distinct()
-		.orderby(sales_invoice.posting_date)
-		.orderby(sales_invoice.creation)
+		.where((dpi.sales_order == doc.items[0].sales_order) & (dpi.docstatus == 1))
+		.orderby(dpi.posting_date)
+		.orderby(dpi.creation)
 	).run(as_dict=True)
-
-	from frappe.query_builder.functions import Min
 
 	ple = DocType("Payment Ledger Entry")
 	invoice_names = [row.name for row in down_payment_invoices]
-	first_payment_date_by_si = {}
+	first_payment_date_by_dpi = {}
 	if invoice_names:
-		# PLE for receivable: invoice submission increases outstanding (amount > 0); payments and
-		# similar credits reduce it (amount < 0). Earliest posting_date among the latter is the first payment.
 		for row in (
 			frappe.qb.from_(ple)
 			.select(ple.against_voucher_no, Min(ple.posting_date).as_("payment_date"))
 			.where(
-				(ple.against_voucher_type == "Sales Invoice")
+				(ple.against_voucher_type == "Down Payment Invoice")
 				& (ple.against_voucher_no.isin(invoice_names))
 				& (ple.delinked == 0)
 				& (ple.account_type == "Receivable")
@@ -457,126 +321,24 @@ def append_down_payment_invoice_to_final_invoice(doc):
 			)
 			.groupby(ple.against_voucher_no)
 		).run(as_dict=True):
-			first_payment_date_by_si[row.against_voucher_no] = row.payment_date
+			first_payment_date_by_dpi[row.against_voucher_no] = row.payment_date
 
 	doc.set("custom_down_payments", [])
-	for down_payment_invoice in down_payment_invoices:
+	for row in down_payment_invoices:
+		dpi_doc = frappe.get_doc("Down Payment Invoice", row.name)
+		net_total = get_down_payment_net_total(dpi_doc)
+		tax_amount = flt(flt(row.down_payment_amount) - net_total, dpi_doc.precision("down_payment_amount"))
 		doc.append(
 			"custom_down_payments",
 			{
-				"invoice_no": down_payment_invoice.name,
-				"date": down_payment_invoice.posting_date,
-				"payment_date": first_payment_date_by_si.get(down_payment_invoice.name),
-				"net_total": down_payment_invoice.net_total,
-				"tax_amount": flt(down_payment_invoice.total_taxes_and_charges),
-				"grand_total": down_payment_invoice.grand_total,
+				"invoice_no": row.name,
+				"date": row.posting_date,
+				"payment_date": first_payment_date_by_dpi.get(row.name),
+				"net_total": net_total,
+				"tax_amount": tax_amount,
+				"grand_total": row.down_payment_amount,
 			},
 		)
-
-
-def post_neutralization_journal_for_down_payment_invoice(si) -> str:
-	"""Debit income and tax accounts (undoing the SI posting), credit Requested Payments liability."""
-	require_requested_payments_account(si.company)
-	requested_acc = get_requested_payments_account(si.company)
-
-	income_totals, income_cc, income_proj = aggregate_income_by_account(si)
-	tax_totals, tax_cc = _aggregate_tax_by_account(si)
-
-	rows = []
-	for acc, amt in sorted(income_totals.items()):
-		append_je_row(
-			rows,
-			acc,
-			amt,
-			0,
-			income_cc.get(acc) or default_cost_center(si.company),
-			income_proj.get(acc),
-		)
-	for acc, amt in sorted(tax_totals.items()):
-		append_je_row(rows, acc, amt, 0, tax_cc.get(acc) or default_cost_center(si.company), None)
-
-	total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
-	if not total_debit:
-		frappe.throw(_("No income or tax lines to neutralize for {0}.").format(si.name))
-
-	append_je_row(
-		rows,
-		requested_acc,
-		0,
-		total_debit,
-		None,
-		None,
-	)
-
-	je = insert_and_submit_je(
-		si.company,
-		si.posting_date,
-		rows,
-		_("Down payment invoice neutralization for {0}").format(si.name),
-		_("Down Payment Neutralization"),
-		sales_invoice=si.name,
-		payment_entry=None,
-	)
-	return je.name
-
-
-def post_neutralization_reversal_journal_for_down_payment_credit_note(return_si) -> str:
-	"""Mirror of neutralization for a credit note: credit income/tax, debit Requested Payments (pairs with return SI GL)."""
-	require_requested_payments_account(return_si.company)
-	requested_acc = get_requested_payments_account(return_si.company)
-
-	income_totals, income_cc, income_proj = aggregate_income_by_account(return_si)
-	tax_totals, tax_cc = _aggregate_tax_by_account(return_si)
-
-	rows = []
-	for acc, amt in sorted(income_totals.items()):
-		amt = abs(flt(amt))
-		if not amt:
-			continue
-		append_je_row(
-			rows,
-			acc,
-			0,
-			amt,
-			income_cc.get(acc) or default_cost_center(return_si.company),
-			income_proj.get(acc),
-		)
-	for acc, amt in sorted(tax_totals.items()):
-		amt = abs(flt(amt))
-		if not amt:
-			continue
-		append_je_row(
-			rows,
-			acc,
-			0,
-			amt,
-			tax_cc.get(acc) or default_cost_center(return_si.company),
-			None,
-		)
-
-	total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
-	if not total_credit:
-		frappe.throw(_("No income or tax lines for reversal on {0}.").format(return_si.name))
-
-	append_je_row(
-		rows,
-		requested_acc,
-		total_credit,
-		0,
-		None,
-		None,
-	)
-
-	je = insert_and_submit_je(
-		return_si.company,
-		return_si.posting_date,
-		rows,
-		_("Down payment credit note — neutralization reversal for {0}").format(return_si.name),
-		_("Down Payment Neutralization Rev."),
-		sales_invoice=return_si.name,
-		payment_entry=None,
-	)
-	return je.name
 
 
 def post_prepayment_recognition_journal_for_final_invoice(si) -> str | None:
@@ -586,20 +348,18 @@ def post_prepayment_recognition_journal_for_final_invoice(si) -> str | None:
 	last_je_name = None
 
 	for dp in si.get("custom_down_payments") or []:
-		dpsi = frappe.get_doc("Sales Invoice", dp.invoice_no)
-		if dpsi.docstatus != 1 or dpsi.custom_invoice_type != "Down Payment Invoice":
-			frappe.throw(
-				_("Down payment invoice {0} must be a submitted Down Payment Invoice.").format(dp.invoice_no)
-			)
-		if not _get_latest_submitted_je_for_si(dp.invoice_no):
+		dpsi = frappe.get_doc("Down Payment Invoice", dp.invoice_no)
+		if dpsi.docstatus != 1:
+			frappe.throw(_("Down payment invoice {0} must be submitted.").format(dp.invoice_no))
+		if not neutralization_journal_exists_for_down_payment_invoice(dp.invoice_no):
 			frappe.throw(
 				_("Down payment invoice {0} has no neutralization journal yet.").format(dp.invoice_no)
 			)
 
-		income_totals, income_cc, income_proj = aggregate_income_by_account(dpsi)
+		income_totals, _, income_cc, income_proj, _ = get_income_tax_totals_for_down_payment_invoice(dpsi)
 		require_down_payment_accounts_for_income(si.company, income_totals.keys())
 		dp_net = flt(dp.net_total)
-		si_net = flt(dpsi.base_net_total)
+		si_net = flt(sum(income_totals.values()))
 		if not si_net or not dp_net:
 			continue
 		if not income_totals:
@@ -732,37 +492,6 @@ def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) ->
 	return last_je_name
 
 
-def get_submitted_payment_entries_against_si(sales_invoice_name: str) -> list[str]:
-	"""Names of submitted Payment Entries that allocate to this Sales Invoice."""
-	pe_ref = DocType("Payment Entry Reference")
-	pe = DocType("Payment Entry")
-	q = (
-		frappe.qb.from_(pe_ref)
-		.inner_join(pe)
-		.on(pe_ref.parent == pe.name)
-		.select(pe.name)
-		.distinct()
-		.where(
-			(pe_ref.reference_doctype == "Sales Invoice")
-			& (pe_ref.reference_name == sales_invoice_name)
-			& (pe.docstatus == 1)
-		)
-	)
-	return q.run(pluck=True)
-
-
-def _get_latest_submitted_je_for_si(sales_invoice_name: str) -> str | None:
-	"""Newest submitted automation Journal Entry linked to this Sales Invoice (`custom_dp_sales_invoice`)."""
-	names = frappe.get_all(
-		"Journal Entry",
-		filters={"custom_dp_sales_invoice": sales_invoice_name, "docstatus": 1},
-		pluck="name",
-		order_by="creation desc",
-		limit_page_length=1,
-	)
-	return names[0] if names else None
-
-
 def _get_submitted_prepayment_recognition_jes_for_final_invoice(final_invoice_name: str) -> list[str]:
 	"""All submitted prepayment recognition JEs for a Final Invoice (one per income account)."""
 	return frappe.get_all(
@@ -771,20 +500,3 @@ def _get_submitted_prepayment_recognition_jes_for_final_invoice(final_invoice_na
 		pluck="name",
 		order_by="creation asc",
 	)
-
-
-def _aggregate_tax_by_account(doc):
-	enable_discount_accounting = cint(
-		frappe.get_single_value("Selling Settings", "enable_discount_accounting")
-	)
-	totals = defaultdict(float)
-	cc = {}
-	for tax in doc.get("taxes") or []:
-		if not tax.account_head:
-			continue
-		if not flt(tax.base_tax_amount_after_discount_amount):
-			continue
-		_tax_amt, base_amount = doc.get_tax_amounts(tax, enable_discount_accounting)
-		totals[tax.account_head] += flt(base_amount)
-		cc.setdefault(tax.account_head, tax.cost_center)
-	return totals, cc
