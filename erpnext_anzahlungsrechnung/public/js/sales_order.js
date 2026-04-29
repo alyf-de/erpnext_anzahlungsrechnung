@@ -1,6 +1,5 @@
 // Copyright (c) 2026, ALYF GmbH and contributors
 // License: MIT. See license.txt
-
 frappe.ui.form.on("Sales Order", {
 	setup(frm) {
 		const cscript = frm.cscript;
@@ -15,19 +14,20 @@ frappe.ui.form.on("Sales Order", {
 			show_down_payment_sales_invoice_dialog(frm);
 		};
 	},
+
+	customer(frm) {
+		set_debit_to_from_party_account(frm);
+	},
+
+	company(frm) {
+		set_debit_to_from_party_account(frm);
+	},
 });
 
 function show_down_payment_sales_invoice_dialog(frm) {
 	const per_billed = flt(frm.doc.per_billed);
-	// Treat near-zero % as unbilled (avoids float noise blocking the final-invoice option incorrectly).
-	const partial_locked = per_billed < 0.01;
 
 	let dialog;
-
-	function refresh_visibility() {
-		const partial = partial_locked || dialog.get_value("create_partial");
-		dialog.set_df_property("share_percent", "hidden", !partial);
-	}
 
 	dialog = new frappe.ui.Dialog({
 		title: __("Create Sales Invoice"),
@@ -44,19 +44,19 @@ function show_down_payment_sales_invoice_dialog(frm) {
 				fieldtype: "Check",
 				label: __("Create Down Payment Invoice"),
 				default: 1,
-				read_only: partial_locked ? 1 : 0,
-				onchange: refresh_visibility,
 			},
 			{
 				fieldname: "share_percent",
 				fieldtype: "Float",
 				label: __("Bill This Share of Total Order (%)"),
 				precision: 2,
+				depends_on: "eval: doc.create_partial",
+				mandatory_depends_on: "eval: doc.create_partial",
 			},
 		],
 		primary_action_label: __("Create"),
 		primary_action(values) {
-			const create_partial = partial_locked ? 1 : values.create_partial ? 1 : 0;
+			const create_partial = values.create_partial ? 1 : 0;
 			const share_percent = flt(values.share_percent);
 
 			if (create_partial) {
@@ -73,12 +73,42 @@ function show_down_payment_sales_invoice_dialog(frm) {
 					share_percent,
 				},
 				freeze: true,
-				freeze_message: __("Creating Down Payment Invoice ..."),
+				freeze_message: create_partial
+					? __("Creating Down Payment Invoice ...")
+					: __("Creating Sales Invoice ..."),
 			});
 			dialog.hide();
 		},
 	});
 
 	dialog.show();
-	refresh_visibility();
+}
+
+function set_debit_to_from_party_account(frm) {
+	if (!frappe.meta.has_field(frm.doctype, "debit_to")) {
+		return;
+	}
+	if (frm.updating_party_details) {
+		return;
+	}
+	if (frm.doc.__onload && frm.doc.__onload.load_after_mapping) {
+		return;
+	}
+	if (!frm.doc.customer || !frm.doc.company) {
+		frm.set_value("debit_to", "");
+		return;
+	}
+	frappe.call({
+		method: "erpnext.accounts.party.get_party_account",
+		args: {
+			party_type: "Customer",
+			party: frm.doc.customer,
+			company: frm.doc.company,
+		},
+		callback(r) {
+			if (!r.exc && r.message) {
+				frm.set_value("debit_to", r.message);
+			}
+		},
+	});
 }

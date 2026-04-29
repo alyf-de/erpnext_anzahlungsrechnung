@@ -10,6 +10,7 @@ from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_
 	cancel_down_payment_invoice_journals,
 	get_income_tax_totals_for_down_payment_invoice,
 	get_submitted_payment_entries_against_down_payment_invoice,
+	get_submitted_payment_entries_linked_via_clearing_journal,
 	post_down_payment_invoice_submission_journals,
 )
 from erpnext_anzahlungsrechnung.scripts.utils import require_down_payment_accounts_for_income
@@ -22,10 +23,13 @@ class DownPaymentInvoice(Document):
 		_validate_company_down_payment_mapping(self)
 
 	def before_cancel(self):
-		pes = get_submitted_payment_entries_against_down_payment_invoice(self.name)
+		pes = set(get_submitted_payment_entries_against_down_payment_invoice(self.name))
+		pes.update(get_submitted_payment_entries_linked_via_clearing_journal(self.name))
 		if pes:
 			frappe.throw(
-				_("Cancel Payment Entries against this invoice before cancelling: {0}").format(", ".join(pes))
+				_("Cancel Payment Entries linked to this down payment before cancelling: {0}").format(
+					", ".join(sorted(pes))
+				)
 			)
 
 	def on_cancel(self):

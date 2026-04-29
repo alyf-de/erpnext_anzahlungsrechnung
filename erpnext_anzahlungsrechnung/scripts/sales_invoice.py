@@ -7,13 +7,11 @@ from frappe.utils.formatters import format_value
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
 	get_down_payment_net_total,
-	get_income_tax_totals_for_down_payment_invoice,
-	neutralization_journal_exists_for_down_payment_invoice,
+	post_final_invoice_down_payment_neutralization_journals,
 )
 from erpnext_anzahlungsrechnung.scripts.utils import (
 	aggregate_income_by_account,
 	append_je_row,
-	default_cost_center,
 	get_company_down_payment_map,
 	insert_and_submit_je,
 	merge_je_account_rows,
@@ -104,7 +102,7 @@ def _validate_company_down_payment_accounts(doc):
 
 
 def on_submit(doc, event):
-	"""Post journal entries for final invoice flows (prepayment recognition, return reversals)."""
+	"""Post journal entries for final invoice flows (down payment neutralization, return reversals)."""
 	if doc.is_consolidated or doc.is_internal_transfer():
 		return
 	if cint(doc.get("is_pos")):
@@ -113,11 +111,11 @@ def on_submit(doc, event):
 	if doc.is_return and doc.return_against:
 		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
 		if orig_type == "Final Invoice":
-			post_prepayment_reversal_journal_for_final_invoice_credit_note(doc)
+			post_final_invoice_down_payment_neutralization_reversal_for_credit_note(doc)
 		return
 
 	if doc.custom_invoice_type == "Final Invoice":
-		post_prepayment_recognition_journal_for_final_invoice(doc)
+		post_final_invoice_down_payment_neutralization_journals(doc)
 
 
 def validate_consistent_currency(doc):
@@ -363,6 +361,22 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		).run(as_dict=True):
 			first_payment_date_by_dpi[row.against_voucher_no] = row.payment_date
 
+	so_name = doc.items[0].sales_order
+	first_so_payment_date = None
+	so_pay_rows = (
+		frappe.qb.from_(ple)
+		.select(Min(ple.posting_date).as_("payment_date"))
+		.where(
+			(ple.against_voucher_type == "Sales Order")
+			& (ple.against_voucher_no == so_name)
+			& (ple.delinked == 0)
+			& (ple.account_type == "Receivable")
+			& (ple.amount < 0)
+		)
+	).run(as_dict=True)
+	if so_pay_rows and so_pay_rows[0].get("payment_date"):
+		first_so_payment_date = so_pay_rows[0]["payment_date"]
+
 	doc.set("custom_down_payments", [])
 	for row in down_payment_invoices:
 		dpi_doc = frappe.get_doc("Down Payment Invoice", row.name)
@@ -373,7 +387,7 @@ def append_down_payment_invoice_to_final_invoice(doc):
 			{
 				"invoice_no": row.name,
 				"date": row.posting_date,
-				"payment_date": first_payment_date_by_dpi.get(row.name),
+				"payment_date": first_payment_date_by_dpi.get(row.name) or first_so_payment_date,
 				"net_total": net_total,
 				"tax_amount": tax_amount,
 				"grand_total": row.down_payment_amount,
@@ -381,88 +395,8 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		)
 
 
-def post_prepayment_recognition_journal_for_final_invoice(si) -> str | None:
-	"""Debit Received Down Payment liability and credit income — one balanced Journal Entry per income account."""
-	dp_map = get_company_down_payment_map(si.company)
-
-	last_je_name = None
-
-	for dp in si.get("custom_down_payments") or []:
-		dpsi = frappe.get_doc("Down Payment Invoice", dp.invoice_no)
-		if dpsi.docstatus != 1:
-			frappe.throw(_("Down payment invoice {0} must be submitted.").format(dp.invoice_no))
-		if not neutralization_journal_exists_for_down_payment_invoice(dp.invoice_no):
-			frappe.throw(
-				_("Down payment invoice {0} has no neutralization journal yet.").format(dp.invoice_no)
-			)
-
-		income_totals, _, income_cc, income_proj, _ = get_income_tax_totals_for_down_payment_invoice(dpsi)
-		require_down_payment_accounts_for_income(si.company, income_totals.keys())
-		dp_net = flt(dp.net_total)
-		si_net = flt(sum(income_totals.values()))
-		if not si_net or not dp_net:
-			continue
-		if not income_totals:
-			frappe.throw(
-				_("Down payment invoice {0} has no income lines for prepayment recognition.").format(
-					dp.invoice_no
-				)
-			)
-
-		buckets = []
-		for acc, amt in income_totals.items():
-			share = flt(dp_net * amt / si_net, 2)
-			if share:
-				received_acc = dp_map[acc]["received_down_payment_account"]
-				buckets.append((acc, share, received_acc, income_cc.get(acc), income_proj.get(acc)))
-
-		sum_shares = sum(b[1] for b in buckets)
-		if buckets and abs(sum_shares - dp_net) > 0.02:
-			first = buckets[0]
-			buckets[0] = (
-				first[0],
-				flt(first[1] + (dp_net - sum_shares)),
-				first[2],
-				first[3],
-				first[4],
-			)
-
-		for acc, share, received_acc, icc, ip in buckets:
-			rows = []
-			append_je_row(
-				rows,
-				received_acc,
-				share,
-				0,
-				None,
-				None,
-				party_type="Customer",
-				party=si.customer,
-			)
-			append_je_row(
-				rows,
-				acc,
-				0,
-				share,
-				icc or default_cost_center(si.company),
-				ip,
-			)
-			je = insert_and_submit_je(
-				si.company,
-				si.posting_date,
-				rows,
-				_("Final invoice prepayment recognition for {0} ({1})").format(si.name, acc),
-				_("Final Invoice Prepayment Recognition"),
-				sales_invoice=si.name,
-				payment_entry=None,
-			)
-			last_je_name = je.name
-
-	return last_je_name
-
-
-def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) -> str:
-	"""Reverse prepayment recognition in proportion to this credit note against a Final Invoice."""
+def post_final_invoice_down_payment_neutralization_reversal_for_credit_note(return_si) -> str:
+	"""Reverse final-invoice down payment neutralization **Journal Entries** in proportion to this credit note."""
 	if not return_si.return_against:
 		frappe.throw(_("Return invoice must reference the original invoice."))
 
@@ -470,10 +404,10 @@ def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) ->
 	if original.custom_invoice_type != "Final Invoice":
 		frappe.throw(_("This reversal only applies when the original invoice is a Final Invoice."))
 
-	prepayment_je_names = _get_submitted_prepayment_recognition_jes_for_final_invoice(original.name)
-	if not prepayment_je_names:
+	neutralization_je_names = _get_submitted_final_invoice_dpi_neutralization_jes(original.name)
+	if not neutralization_je_names:
 		frappe.throw(
-			_("Original final invoice {0} has no prepayment recognition journal.").format(original.name)
+			_("Original final invoice {0} has no down payment neutralization journal.").format(original.name)
 		)
 
 	orig_net = abs(flt(original.base_net_total))
@@ -481,10 +415,10 @@ def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) ->
 	ratio = ret_net / orig_net if orig_net else 1.0
 
 	last_je_name = None
-	for prepayment_je_name in prepayment_je_names:
-		prepayment_je = frappe.get_doc("Journal Entry", prepayment_je_name)
+	for je_name in neutralization_je_names:
+		source_je = frappe.get_doc("Journal Entry", je_name)
 		rows = []
-		for line in prepayment_je.accounts:
+		for line in source_je.accounts:
 			debit = abs(flt(line.debit_in_account_currency)) * ratio
 			credit = abs(flt(line.credit_in_account_currency)) * ratio
 			if not debit and not credit:
@@ -516,14 +450,14 @@ def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) ->
 		total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
 		total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
 		if abs(total_debit - total_credit) > 0.02:
-			frappe.throw(_("Final invoice prepayment credit note journal does not balance."))
+			frappe.throw(_("Final invoice down payment credit note journal does not balance."))
 
 		je = insert_and_submit_je(
 			return_si.company,
 			return_si.posting_date,
 			rows,
-			_("Final invoice prepayment reversal for {0}").format(return_si.name),
-			_("Final Invoice Prepayment Reversal"),
+			_("Final invoice down payment reversal for {0}").format(return_si.name),
+			_("Final Invoice Down Payment Reversal"),
 			sales_invoice=return_si.name,
 			payment_entry=None,
 		)
@@ -532,11 +466,14 @@ def post_prepayment_reversal_journal_for_final_invoice_credit_note(return_si) ->
 	return last_je_name
 
 
-def _get_submitted_prepayment_recognition_jes_for_final_invoice(final_invoice_name: str) -> list[str]:
-	"""All submitted prepayment recognition JEs for a Final Invoice (one per income account)."""
+def _get_submitted_final_invoice_dpi_neutralization_jes(final_invoice_name: str) -> list[str]:
 	return frappe.get_all(
 		"Journal Entry",
-		filters={"custom_dp_sales_invoice": final_invoice_name, "docstatus": 1},
+		filters=[
+			["custom_dp_sales_invoice", "=", final_invoice_name],
+			["docstatus", "=", 1],
+			["custom_dp_down_payment_invoice", "is", "set"],
+		],
 		pluck="name",
 		order_by="creation asc",
 	)

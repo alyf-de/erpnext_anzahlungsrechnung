@@ -6,9 +6,9 @@
 from collections import defaultdict
 
 import frappe
-from erpnext.accounts.party import get_party_account
 from frappe import _
 from frappe.query_builder import DocType
+from frappe.query_builder.functions import Coalesce, Sum
 from frappe.utils import flt
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_tax_allocation import (
@@ -20,9 +20,22 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 	get_company_down_payment_map,
 	get_requested_payments_account,
 	insert_and_submit_je,
+	merge_je_account_rows,
 	require_down_payment_accounts_for_income,
 	require_requested_payments_account,
 )
+
+# Passed to new **Journal Entry** documents. ERPNext ``validate`` overwrites ``title`` with
+# ``get_title()`` (first account, etc.), so do **not** look up automation JEs by ``title`` —
+# use ``custom_dp_*`` links instead.
+JE_TITLE_DOWN_PAYMENT_OPENING = "Down Payment Opening"
+JE_TITLE_DOWN_PAYMENT_RECEIPT_CLEARING = "Down Payment Receipt Clearing"
+JE_TITLE_FINAL_INVOICE_DPI_NEUTRALIZATION = "Final Invoice Down Payment Neutralization"
+
+
+def get_receivable_account_for_down_payment_invoice(dpi) -> str:
+	"""Receivable account for Step 1 **Journal Entry** from **Sales Order** ``debit_to``."""
+	return frappe.db.get_value("Sales Order", dpi.sales_order, "debit_to")
 
 
 def get_income_tax_totals_for_down_payment_invoice(dpi):
@@ -86,50 +99,14 @@ def get_down_payment_tax_total(dpi):
 	return flt(sum(tax_totals.values()))
 
 
-def post_down_payment_invoice_submission_journals(dpi) -> tuple[str, str]:
-	"""Receivable + revenue/tax mirror, then neutralization to Requested Payments. Returns (initial_je, neutralization_je)."""
-	income_totals, tax_totals, income_cc, income_proj, tax_cc = (
-		get_income_tax_totals_for_down_payment_invoice(dpi)
-	)
-	if income_totals:
-		require_down_payment_accounts_for_income(dpi.company, income_totals.keys())
-
+def post_down_payment_invoice_submission_journals(dpi) -> str:
+	"""Step 1: Dr receivable, Cr *Requested Payments Account* (single **Journal Entry**)."""
+	require_requested_payments_account(dpi.company)
+	requested_acc = get_requested_payments_account(dpi.company)
+	receivable = get_receivable_account_for_down_payment_invoice(dpi)
 	grand = flt(dpi.down_payment_amount)
-	sum_inc = sum(income_totals.values())
-	sum_tax = sum(tax_totals.values())
-	adj = flt(grand - sum_inc - sum_tax)
-	if abs(adj) > 0.0001 and income_totals:
-		big = max(income_totals.keys(), key=lambda k: income_totals[k])
-		income_totals[big] += adj
-		sum_inc = sum(income_totals.values())
-	if abs(sum_inc + sum_tax - grand) > 0.06:
-		frappe.throw(
-			_("Down payment split ({0} + {1}) does not match gross amount ({2}).").format(
-				sum_inc, sum_tax, grand
-			)
-		)
 
-	receivable = get_party_account("Customer", dpi.customer, dpi.company, include_advance=False)
 	rows = []
-	credit_total = 0.0
-	for acc, amt in sorted(income_totals.items()):
-		if not amt:
-			continue
-		append_je_row(
-			rows,
-			acc,
-			0,
-			amt,
-			income_cc.get(acc) or default_cost_center(dpi.company),
-			income_proj.get(acc),
-		)
-		credit_total += amt
-	for acc, amt in sorted(tax_totals.items()):
-		if not amt:
-			continue
-		append_je_row(rows, acc, 0, amt, tax_cc.get(acc) or default_cost_center(dpi.company), None)
-		credit_total += amt
-
 	append_je_row(
 		rows,
 		receivable,
@@ -140,51 +117,14 @@ def post_down_payment_invoice_submission_journals(dpi) -> tuple[str, str]:
 		party_type="Customer",
 		party=dpi.customer,
 	)
-
-	je1 = insert_and_submit_je(
-		dpi.company,
-		dpi.posting_date,
-		rows,
-		_("Down payment invoice booking for {0}").format(dpi.name),
-		_("Down Payment Invoice"),
-		sales_invoice=None,
-		payment_entry=None,
-		down_payment_invoice=dpi.name,
-	)
-
-	je2_name = _post_neutralization_journal(dpi, income_totals, tax_totals, income_cc, income_proj, tax_cc)
-	return je1.name, je2_name
-
-
-def _post_neutralization_journal(dpi, income_totals, tax_totals, income_cc, income_proj, tax_cc) -> str:
-	require_requested_payments_account(dpi.company)
-	requested_acc = get_requested_payments_account(dpi.company)
-
-	rows = []
-	for acc, amt in sorted(income_totals.items()):
-		append_je_row(
-			rows,
-			acc,
-			amt,
-			0,
-			income_cc.get(acc) or default_cost_center(dpi.company),
-			income_proj.get(acc),
-		)
-	for acc, amt in sorted(tax_totals.items()):
-		append_je_row(rows, acc, amt, 0, tax_cc.get(acc) or default_cost_center(dpi.company), None)
-
-	total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
-	if not total_debit:
-		frappe.throw(_("No income or tax lines to neutralize for {0}.").format(dpi.name))
-
-	append_je_row(rows, requested_acc, 0, total_debit, None, None)
+	append_je_row(rows, requested_acc, 0, grand, None, None)
 
 	je = insert_and_submit_je(
 		dpi.company,
 		dpi.posting_date,
 		rows,
-		_("Down payment invoice neutralization for {0}").format(dpi.name),
-		_("Down Payment Neutralization"),
+		_("Down payment opening for {0}").format(dpi.name),
+		JE_TITLE_DOWN_PAYMENT_OPENING,
 		sales_invoice=None,
 		payment_entry=None,
 		down_payment_invoice=dpi.name,
@@ -221,29 +161,31 @@ def get_submitted_payment_entries_against_down_payment_invoice(dpi_name: str) ->
 	).run(pluck=True)
 
 
-def get_latest_submitted_je_for_down_payment_invoice(dpi_name: str) -> str | None:
-	"""Newest submitted automation **Journal Entry** linked to this **Down Payment Invoice**."""
+def get_submitted_payment_entries_linked_via_clearing_journal(dpi_name: str) -> list[str]:
+	"""**Payment Entry** names that have a submitted receipt-clearing **Journal Entry** for this DPI."""
 	names = frappe.get_all(
 		"Journal Entry",
-		filters={"custom_dp_down_payment_invoice": dpi_name, "docstatus": 1},
-		pluck="name",
-		order_by="creation desc",
-		limit_page_length=1,
+		filters=[
+			["custom_dp_down_payment_invoice", "=", dpi_name],
+			["docstatus", "=", 1],
+			["custom_dp_sales_invoice", "is", "not set"],
+			["custom_dp_payment_entry", "is", "set"],
+		],
+		pluck="custom_dp_payment_entry",
 	)
-	return names[0] if names else None
+	return list(dict.fromkeys(n for n in names if n))
 
 
-def neutralization_journal_exists_for_down_payment_invoice(dpi_name: str) -> bool:
-	"""Whether the neutralization **Journal Entry** for this DPI was submitted (not only the receivable booking)."""
-	neutral_title = _("Down Payment Neutralization")
+def opening_journal_exists_for_down_payment_invoice(dpi_name: str) -> bool:
 	return bool(
 		frappe.get_all(
 			"Journal Entry",
-			filters={
-				"custom_dp_down_payment_invoice": dpi_name,
-				"docstatus": 1,
-				"title": neutral_title,
-			},
+			filters=[
+				["custom_dp_down_payment_invoice", "=", dpi_name],
+				["docstatus", "=", 1],
+				["custom_dp_sales_invoice", "is", "not set"],
+				["custom_dp_payment_entry", "is", "not set"],
+			],
 			limit=1,
 		)
 	)
@@ -257,3 +199,245 @@ def aggregate_tax_amounts_for_down_payment_invoice(dpi):
 		if base_amt:
 			out.append((acc, flt(base_amt), tax_cc.get(acc)))
 	return out
+
+
+def get_total_receipt_clearing_debit_on_requested_for_dpi(dpi_name: str, company: str) -> float:
+	"""Sum Dr on *Requested Payments Account* from submitted receipt-clearing **Journal Entry** records for this DPI."""
+	requested = get_requested_payments_account(company)
+	if not requested:
+		return 0.0
+	je = DocType("Journal Entry")
+	jea = DocType("Journal Entry Account")
+	q = (
+		frappe.qb.from_(jea)
+		.inner_join(je)
+		.on(jea.parent == je.name)
+		.select(Sum(jea.debit_in_account_currency))
+		.where(
+			(je.custom_dp_down_payment_invoice == dpi_name)
+			& (je.docstatus == 1)
+			& (Coalesce(je.custom_dp_sales_invoice, "") == "")
+			& (Coalesce(je.custom_dp_payment_entry, "") != "")
+			& (jea.account == requested)
+		)
+	)
+	row = q.run()
+	return flt(row[0][0]) if row and row[0] else 0.0
+
+
+def fifo_split_sales_order_payment_to_dpis(
+	sales_order: str, alloc_base: float, company: str
+) -> list[tuple[str, float]]:
+	"""
+	Split a **Payment Entry** allocation against **Sales Order** across submitted **Down Payment Invoice**
+	documents FIFO by ``posting_date``, ``creation``. Each slice is capped by remaining opening capacity on that DPI.
+	"""
+	alloc_base = flt(alloc_base)
+	if not alloc_base:
+		return []
+
+	dpis = frappe.get_all(
+		"Down Payment Invoice",
+		filters={"sales_order": sales_order, "docstatus": 1},
+		fields=["name", "down_payment_amount"],
+		order_by="posting_date asc, creation asc",
+	)
+	remaining = alloc_base
+	out = []
+	for row in dpis:
+		if remaining <= 0:
+			break
+		dpi_name = row.name
+		gross = flt(row.down_payment_amount)
+		cleared = get_total_receipt_clearing_debit_on_requested_for_dpi(dpi_name, company)
+		capacity = flt(gross - cleared)
+		if capacity <= 0:
+			continue
+		take = min(remaining, capacity)
+		if take > 0:
+			out.append((dpi_name, take))
+			remaining -= take
+	if remaining > 0.02:
+		frappe.throw(
+			_("Payment against Sales Order {0} exceeds remaining down payment clearing capacity.").format(
+				frappe.bold(sales_order)
+			)
+		)
+	return out
+
+
+def build_down_payment_receipt_clearing_journal_accounts(
+	pe,
+	dpi,
+	alloc_base: float,
+	ref_type: str,
+	ref_name: str,
+) -> list[dict]:
+	"""Account rows for one receipt-clearing **Journal Entry** (Step 2) for ``alloc_base`` in company currency."""
+	income_totals, _tax_totals, _icc, _ipr, _tcc = get_income_tax_totals_for_down_payment_invoice(dpi)
+	require_down_payment_accounts_for_income(pe.company, income_totals.keys())
+	dp_map = get_company_down_payment_map(pe.company)
+
+	require_requested_payments_account(pe.company)
+	requested_acc = get_requested_payments_account(pe.company)
+
+	alloc_base = flt(alloc_base)
+	if not alloc_base:
+		return []
+
+	base_net = flt(sum(income_totals.values()))
+	base_grand = flt(dpi.down_payment_amount)
+	if not base_grand:
+		return []
+
+	net_portion = flt(alloc_base * base_net / base_grand, 2)
+	tax_pool = flt(alloc_base - net_portion, 2)
+
+	tax_amounts = aggregate_tax_amounts_for_down_payment_invoice(dpi)
+	tax_splits = defaultdict(float)
+	total_tax_base = sum(flt(a[1]) for a in tax_amounts)
+	if total_tax_base > 0 and tax_pool:
+		for acc, base_amt, cc in tax_amounts:
+			part = flt(tax_pool * flt(base_amt) / total_tax_base, 2)
+			tax_splits[(acc, cc or "")] += part
+		sum_tax = sum(tax_splits.values())
+		if tax_splits and abs(sum_tax - tax_pool) > 0.01:
+			first_key = next(iter(tax_splits))
+			tax_splits[first_key] += flt(tax_pool - sum_tax)
+
+	rows = []
+	append_je_row(rows, requested_acc, alloc_base, 0, None, None, ref_type, ref_name)
+
+	for (acc, cc_key), amt in tax_splits.items():
+		if amt:
+			cc = cc_key or None
+			append_je_row(
+				rows,
+				acc,
+				0,
+				amt,
+				cc or default_cost_center(pe.company),
+				None,
+				ref_type,
+				ref_name,
+			)
+
+	if net_portion and base_net:
+		recv_lines = []
+		for acc, amt in income_totals.items():
+			if not amt:
+				continue
+			part = flt(net_portion * flt(amt) / base_net, 2)
+			if part:
+				received_acc = dp_map[acc]["received_down_payment_account"]
+				recv_lines.append((received_acc, part))
+		sum_recv = sum(x[1] for x in recv_lines)
+		if recv_lines and abs(sum_recv - net_portion) > 0.01:
+			first_acc, first_amt = recv_lines[0]
+			recv_lines[0] = (first_acc, flt(first_amt + (net_portion - sum_recv)))
+		for received_acc, part in recv_lines:
+			append_je_row(
+				rows,
+				received_acc,
+				0,
+				part,
+				None,
+				None,
+				ref_type,
+				ref_name,
+				party_type=pe.party_type,
+				party=pe.party,
+			)
+
+	return rows
+
+
+def get_interim_journal_entry_names_for_down_payment_invoice(dpi_name: str) -> list[str]:
+	"""Submitted Step 1 and Step 2 automation **Journal Entry** names for this DPI (chronological)."""
+	return frappe.get_all(
+		"Journal Entry",
+		filters=[
+			["custom_dp_down_payment_invoice", "=", dpi_name],
+			["docstatus", "=", 1],
+			["custom_dp_sales_invoice", "is", "not set"],
+		],
+		pluck="name",
+		order_by="creation asc",
+	)
+
+
+def build_reversed_journal_rows_from_entries(je_names: list[str]) -> list[dict]:
+	"""Invert all account lines from the given **Journal Entry** documents into one merged row list."""
+	rows = []
+	for name in je_names:
+		je = frappe.get_doc("Journal Entry", name)
+		for line in je.accounts:
+			debit = flt(line.debit_in_account_currency)
+			credit = flt(line.credit_in_account_currency)
+			if debit:
+				append_je_row(
+					rows,
+					line.account,
+					0,
+					debit,
+					line.cost_center,
+					line.project,
+					line.reference_type or None,
+					line.reference_name or None,
+					party_type=line.party_type or None,
+					party=line.party or None,
+				)
+			if credit:
+				append_je_row(
+					rows,
+					line.account,
+					credit,
+					0,
+					line.cost_center,
+					line.project,
+					line.reference_type or None,
+					line.reference_name or None,
+					party_type=line.party_type or None,
+					party=line.party or None,
+				)
+	return merge_je_account_rows(rows)
+
+
+def post_final_invoice_down_payment_neutralization_journals(si) -> str | None:
+	"""Step 3-4: For each linked DPI, post one **Journal Entry** that reverses opening + receipt-clearing interim bookings."""
+	last_je = None
+	for dp in si.get("custom_down_payments") or []:
+		dpsi = frappe.get_doc("Down Payment Invoice", dp.invoice_no)
+		if dpsi.docstatus != 1:
+			frappe.throw(_("Down payment invoice {0} must be submitted.").format(dp.invoice_no))
+		if not opening_journal_exists_for_down_payment_invoice(dp.invoice_no):
+			frappe.throw(
+				_("Down payment invoice {0} has no opening journal entry yet.").format(dp.invoice_no)
+			)
+
+		je_names = get_interim_journal_entry_names_for_down_payment_invoice(dp.invoice_no)
+		if not je_names:
+			continue
+		rows = build_reversed_journal_rows_from_entries(je_names)
+		if not rows:
+			continue
+		rows = merge_je_account_rows(rows)
+		total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
+		total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
+		if abs(total_debit - total_credit) > 0.02:
+			frappe.throw(
+				_("Final invoice down payment neutralization does not balance for {0}.").format(dp.invoice_no)
+			)
+
+		je = insert_and_submit_je(
+			si.company,
+			si.posting_date,
+			rows,
+			_("Final invoice neutralization for down payment {0} ({1})").format(dp.invoice_no, si.name),
+			JE_TITLE_FINAL_INVOICE_DPI_NEUTRALIZATION,
+			sales_invoice=si.name,
+			payment_entry=None,
+			down_payment_invoice=dp.invoice_no,
+		)
+		last_je = je.name
+	return last_je
