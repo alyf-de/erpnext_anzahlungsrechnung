@@ -24,6 +24,13 @@ def before_validate(doc, event):
 	validate_sales_order_consistency(doc)
 	append_down_payment_invoice_to_final_invoice(doc)
 
+	overwrite_billing_allowance(doc)
+
+
+def overwrite_billing_allowance(doc):
+	accounts_settings = frappe.get_single("Accounts Settings")
+	accounts_settings.over_billing_allowance = 40000
+
 
 def validate(doc, event):
 	"""After ERPNext validate (taxes calculated): Company Down Payment Account mapping vs income/tax lines."""
@@ -196,7 +203,7 @@ def validate_sales_order_consistency(doc):
 	if doc.custom_invoice_type in ["Down Payment Invoice", "Final Invoice"]:
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
-		_prevent_position_discounts(doc)
+		_validate_position_discounts_match_sales_order(doc)
 
 	if doc.custom_invoice_type == "Down Payment Invoice":
 		_validate_down_payment_invoice_billing_limits(doc)
@@ -298,10 +305,27 @@ def _validate_down_payment_invoice_billing_limits(doc):
 			)
 
 
-def _prevent_position_discounts(doc):
-	"""Disallow position discounts on down payment or final invoices."""
-	if any(item.discount_percentage for item in doc.items):
-		frappe.throw(_("Position Discounts are not allowed for Down Payment Invoices or Final Invoices."))
+def _validate_position_discounts_match_sales_order(doc):
+	"""Each line's discount % must match the linked Sales Order Item."""
+	so_items = frappe.db.get_all(
+		"Sales Order Item",
+		filters={"parent": doc.items[0].sales_order, "parenttype": "Sales Order"},
+		fields=["name", "idx", "discount_percentage"],
+	)
+
+	for si_item in doc.items:
+		so_row = next((so_item for so_item in so_items if so_item.name == si_item.so_detail), None)
+		if so_row.discount_percentage != si_item.discount_percentage:
+			frappe.throw(
+				_(
+					"Position discount % on row {0} must match Sales Order position #{1} ({2} % on order, {3} % on invoice)."
+				).format(
+					si_item.idx,
+					so_row.idx,
+					so_row.discount_percentage,
+					si_item.discount_percentage,
+				)
+			)
 
 
 def _prevent_additional_discounts(doc):

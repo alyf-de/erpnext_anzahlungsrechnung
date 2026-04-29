@@ -145,10 +145,6 @@ doc_events = {
 		"validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.validate",
 		"on_submit": "erpnext_anzahlungsrechnung.scripts.sales_invoice.on_submit",
 	},
-	"Sales Order": {
-		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_order.before_validate",
-		"before_update_after_submit": "erpnext_anzahlungsrechnung.scripts.sales_order.before_update_after_submit",
-	},
 }
 
 # Scheduled Tasks
