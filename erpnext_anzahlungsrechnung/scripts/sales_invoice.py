@@ -187,6 +187,7 @@ def validate_sales_order_consistency(doc):
 		_ensure_only_one_linked_sales_order(doc.items)
 		_prevent_position_discounts(doc)
 		_ensure_final_invoice_completes_sales_order_positions(doc)
+		_validate_final_invoice_income_accounts_match_sales_order(doc)
 
 
 def _avoid_invoice_type_inconsistencies(invoice_type, items):
@@ -235,6 +236,45 @@ def _prevent_position_discounts(doc):
 	"""Disallow position discounts on final invoices."""
 	if any(item.discount_percentage for item in doc.items):
 		frappe.throw(_("Position Discounts are not allowed for Final Invoices."))
+
+
+def _validate_final_invoice_income_accounts_match_sales_order(doc):
+	"""Final **Sales Invoice** income account must match **Sales Order Item** ``income_account`` for each linked row."""
+	rows = frappe.get_all(
+		"Sales Order Item",
+		filters={"parent": doc.items[0].sales_order, "parenttype": "Sales Order"},
+		fields=["idx", "item_code", "income_account"],
+	)
+	for item in doc.items:
+		if not item.so_detail:
+			continue
+		so_row = next((r for r in rows if r.item_code == item.item_code), None)
+		if not so_row:
+			frappe.throw(_("Sales Order Item {0} not found.").format(item.item_code))
+		if not so_row.get("income_account"):
+			frappe.throw(
+				_(
+					"Sales Order row {0} has no Income Account. Save the Sales Order after upgrading the app, or set Item Default for company {1}."
+				).format(so_row.idx, doc.company)
+			)
+		expected = so_row["income_account"]
+		si_account = (
+			item.income_account
+			if (not item.enable_deferred_revenue or doc.is_return)
+			else item.deferred_revenue_account
+		)
+		if si_account != expected:
+			frappe.throw(
+				_(
+					"Income account on invoice row {0} ({1}) does not match Sales Order row {2} (expected {3}, got {4})."
+				).format(
+					item.idx,
+					item.item_code or "",
+					so_row.get("idx"),
+					frappe.bold(expected),
+					frappe.bold(si_account or ""),
+				)
+			)
 
 
 def _ensure_final_invoice_completes_sales_order_positions(doc):

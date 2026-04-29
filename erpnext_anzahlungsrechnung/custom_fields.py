@@ -117,5 +117,15 @@ def get_custom_fields():
 				"read_only_depends_on": "eval: doc.per_billed > 0",
 			},
 		],
+		"Sales Order Item": [
+			{
+				"fieldname": "income_account",
+				"label": "Income Account",
+				"fieldtype": "Link",
+				"insert_after": "project",
+				"options": "Account",
+				"description": "Defaults from Item Default (company); used for down payment allocation and final invoice checks.",
+			},
+		],
 	}
 	return custom_fields

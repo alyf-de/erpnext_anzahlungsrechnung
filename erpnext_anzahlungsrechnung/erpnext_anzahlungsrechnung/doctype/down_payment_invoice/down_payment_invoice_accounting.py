@@ -39,7 +39,7 @@ def get_income_tax_totals_for_down_payment_invoice(dpi):
 
 	factor = D / G
 	for item in so.get("items") or []:
-		acc = item.income_account
+		acc = getattr(item, "income_account", None)
 		if not acc:
 			continue
 		amt = flt(flt(item.net_amount) * factor, item.precision("net_amount"))

@@ -1,16 +1,69 @@
 import frappe
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice as erpnext_make_sales_invoice
+from erpnext.stock.get_item_details import ItemDetailsCtx, get_item_details
 from frappe import _
 from frappe.utils import cint, flt, today
 
 
 def before_validate(doc, event):
+	_sync_income_account_on_sales_order_items(doc)
+	_require_income_account_for_down_payment_sales_order(doc)
 	_avoid_position_discounts_on_down_payment_invoices(doc)
 
 
 def before_update_after_submit(doc, event):
 	if doc.has_value_changed("custom_invoice_type"):
 		_avoid_position_discounts_on_down_payment_invoices(doc)
+
+
+def _sync_income_account_on_sales_order_items(doc):
+	"""Set ``income_account`` like selling transactions: ``get_item_details`` (item / group / brand / company chain)."""
+	if not doc.company or not doc.get("items"):
+		return
+	if not frappe.get_meta("Sales Order Item").get_field("income_account"):
+		return
+
+	company_changed = doc.has_value_changed("company")
+	parent_dict = {fieldname: doc.get(fieldname) for fieldname in doc.meta.get_valid_columns()}
+	parent_dict["document_type"] = "Sales Order Item"
+
+	for item in doc.get("items") or []:
+		if not item.get("item_code"):
+			continue
+		if not (not item.get("income_account") or company_changed or item.has_value_changed("item_code")):
+			continue
+
+		ctx: ItemDetailsCtx = ItemDetailsCtx(parent_dict.copy())
+		ctx.update(item.as_dict())
+		ctx.update(
+			{
+				"doctype": doc.doctype,
+				"name": doc.name,
+				"child_doctype": item.doctype,
+				"child_docname": item.name,
+				"ignore_pricing_rule": doc.get("ignore_pricing_rule") or 0,
+			}
+		)
+		if not ctx.transaction_date:
+			ctx.transaction_date = ctx.get("posting_date")
+
+		ret = get_item_details(ctx, doc, for_validate=True, overwrite_warehouse=False)
+		if ret.get("income_account"):
+			item.income_account = ret["income_account"]
+
+
+def _require_income_account_for_down_payment_sales_order(doc):
+	"""Down-payment **Sales Order** rows that bill stock need an income account for allocation."""
+	if doc.custom_invoice_type != "Down Payment Invoice":
+		return
+	for item in doc.get("items") or []:
+		if not item.get("income_account"):
+			frappe.throw(
+				_(
+					"Row {0}: Income Account could not be resolved for item {1} (company {2}). "
+					"Check item defaults, item group / brand defaults, or company default income account."
+				).format(item.idx, item.item_code, doc.company)
+			)
 
 
 def _avoid_position_discounts_on_down_payment_invoices(doc):
