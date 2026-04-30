@@ -197,7 +197,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-30 10:20:38.182800",
+ "modified": "2026-04-30 12:59:13.437795",
  "modified_by": "Administrator",
  "module": "ERPNext Anzahlungsrechnung",
  "name": "Down Payment Invoice",
@@ -253,6 +253,7 @@
    "share": 1
   }
  ],
+ "protect_attached_files": 1,
  "row_format": "Dynamic",
  "rows_threshold_for_grid_search": 20,
  "sort_field": "creation",
