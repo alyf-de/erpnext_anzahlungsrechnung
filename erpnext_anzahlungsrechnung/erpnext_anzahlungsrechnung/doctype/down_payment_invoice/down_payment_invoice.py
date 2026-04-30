@@ -4,7 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import flt
+from frappe.utils import flt, fmt_money
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
 	cancel_down_payment_invoice_journals,
@@ -40,14 +40,47 @@ class DownPaymentInvoice(Document):
 
 
 def _validate_sales_order_down_payment_flow(doc):
-	if not doc.sales_order:
-		return
-	so_type = frappe.db.get_value("Sales Order", doc.sales_order, "custom_invoice_type")
-	if so_type != "Down Payment Invoice":
+	"""
+	Validate:
+	- Sales Order's invoice type is "Down Payment Invoice".
+	- Sales Order is submitted.
+	- Sales Order is not billed.
+	- Outstanding amount is smaller than the requested down payment amount.
+	- "Total Sales Order Amount" is not outdated.
+	"""
+	so_doc = frappe.get_doc("Sales Order", doc.sales_order)
+	# 1. Sales Order's invoice type is "Down Payment Invoice".
+	if so_doc.custom_invoice_type != "Down Payment Invoice":
 		frappe.throw(
 			_(
 				"The Invoice Type ({0}) of the Sales Order {1} does not match the down payment flow (expected Down Payment Invoice)."
-			).format(_(so_type or ""), doc.sales_order)
+			).format(_(so_doc.custom_invoice_type or ""), so_doc.name)
+		)
+
+	# 2. Sales Order is submitted.
+	if so_doc.docstatus != 1:
+		frappe.throw(_("The Sales Order {0} is not submitted.").format(so_doc.name))
+
+	# 3. Sales Order is not billed.
+	if so_doc.per_billed > 0:
+		frappe.throw(_("The Sales Order {0} is billed.").format(so_doc.name))
+
+	# 4. Outstanding amount is smaller than the requested down payment amount.
+	if (so_doc.grand_total - so_doc.advance_paid) < doc.down_payment_amount:
+		frappe.throw(
+			_(
+				"The requested down payment amount ({0}) is greater than the outstanding amount ({1}) of the Sales Order {2}."
+			).format(
+				fmt_money(doc.down_payment_amount, currency=so_doc.currency),
+				fmt_money(so_doc.grand_total - so_doc.advance_paid, currency=so_doc.currency),
+				so_doc.name,
+			)
+		)
+
+	# 5. "Total Sales Order Amount" is not outdated.
+	if flt(doc.total_sales_order_amount) != flt(so_doc.grand_total):
+		frappe.throw(
+			_("The Total Sales Order Amount of the Sales Order {0} is outdated.").format(so_doc.name)
 		)
 
 
