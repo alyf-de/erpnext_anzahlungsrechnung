@@ -5,6 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "invoice_file",
   "naming_series",
   "section_connection",
   "sales_order",
@@ -191,13 +192,20 @@
    "fieldtype": "Text Editor",
    "label": "Position Description",
    "reqd": 1
+  },
+  {
+   "fieldname": "invoice_file",
+   "fieldtype": "Attach",
+   "label": "Invoice File",
+   "no_copy": 1,
+   "read_only": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-30 12:59:13.437795",
+ "modified": "2026-04-30 13:00:40.254557",
  "modified_by": "Administrator",
  "module": "ERPNext Anzahlungsrechnung",
  "name": "Down Payment Invoice",
