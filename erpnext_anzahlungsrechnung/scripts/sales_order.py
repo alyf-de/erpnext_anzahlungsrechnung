@@ -10,13 +10,11 @@ from erpnext_anzahlungsrechnung.scripts.utils import has_additional_discount_on_
 def before_validate(doc, event):
 	_sync_income_account_on_sales_order_items(doc)
 	_require_income_account_for_down_payment_sales_order(doc)
-	_avoid_position_discounts_on_down_payment_invoices(doc)
 	has_additional_discount_on_grand_total(doc)
 
 
 def before_update_after_submit(doc, event):
 	if doc.has_value_changed("custom_invoice_type"):
-		_avoid_position_discounts_on_down_payment_invoices(doc)
 		has_additional_discount_on_grand_total(doc)
 
 
@@ -68,19 +66,6 @@ def _require_income_account_for_down_payment_sales_order(doc):
 					"Check item defaults, item group / brand defaults, or company default income account."
 				).format(item.idx, item.item_code, doc.company)
 			)
-
-
-def _avoid_position_discounts_on_down_payment_invoices(doc):
-	if doc.custom_invoice_type != "Down Payment Invoice":
-		return
-	if not any(item.discount_percentage and item.discount_percentage > 0 for item in doc.items):
-		return
-
-	frappe.throw(
-		_(
-			"Position discounts are not allowed for Sales Orders with invoice type Down Payment Invoice. Use Apply Additional Discount On Net Total if you need an order-level discount."
-		)
-	)
 
 
 @frappe.whitelist()

@@ -184,7 +184,6 @@ def validate_sales_order_consistency(doc):
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_validate_consistent_currency(doc)
-		_prevent_position_discounts(doc)
 		_ensure_final_invoice_completes_sales_order_positions(doc)
 		_validate_final_invoice_income_accounts_match_sales_order(doc)
 		has_additional_discount_on_grand_total(doc)
@@ -230,12 +229,6 @@ def _ensure_only_one_linked_sales_order(items):
 	"""Ensure final invoices reference exactly one Sales Order."""
 	if len({item.sales_order for item in items}) > 1:
 		frappe.throw(_("Final Invoices can only process a single Sales Order."))
-
-
-def _prevent_position_discounts(doc):
-	"""Disallow position discounts on final invoices."""
-	if any(item.discount_percentage for item in doc.items):
-		frappe.throw(_("Position Discounts are not allowed for Final Invoices."))
 
 
 def _validate_final_invoice_income_accounts_match_sales_order(doc):
