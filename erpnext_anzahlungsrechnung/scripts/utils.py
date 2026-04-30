@@ -8,7 +8,8 @@ from frappe.utils import cint, flt
 def has_additional_discount_on_grand_total(doc):
 	"""
 	Throws an error if the document has an additional discount on Grand Total.
-	Only applies to Sales Orders and Sales Invoices with invoice type "Down Payment Invoice" or "Final Invoice".
+	Applies when *Invoice Type* is "Down Payment Invoice" or "Final Invoice" on **Sales Order**,
+	or "Final Invoice" on **Sales Invoice** (down payment is no longer a **Sales Invoice** type).
 	"""
 	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
 		return

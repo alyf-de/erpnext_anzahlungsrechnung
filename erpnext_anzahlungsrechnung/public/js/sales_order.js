@@ -25,63 +25,123 @@ frappe.ui.form.on("Sales Order", {
 });
 
 function show_down_payment_sales_invoice_dialog(frm) {
-	const per_billed = flt(frm.doc.per_billed);
-
-	let dialog;
-
-	dialog = new frappe.ui.Dialog({
-		title: __("Create Sales Invoice"),
-		fields: [
-			{
-				fieldname: "per_billed_info",
-				fieldtype: "Data",
-				label: __("Already Invoiced (%)"),
-				read_only: 1,
-				default: String(per_billed),
+	frappe.db
+		.get_list("Down Payment Invoice", {
+			filters: {
+				sales_order: frm.doc.name,
+				docstatus: ["!=", 2],
 			},
-			{
-				fieldname: "create_partial",
-				fieldtype: "Check",
-				label: __("Create Down Payment Invoice"),
-				default: 1,
-			},
-			{
-				fieldname: "share_percent",
-				fieldtype: "Float",
-				label: __("Bill This Share of Total Order (%)"),
-				precision: 2,
-				depends_on: "eval: doc.create_partial",
-				mandatory_depends_on: "eval: doc.create_partial",
-			},
-		],
-		primary_action_label: __("Create"),
-		primary_action(values) {
-			const create_partial = values.create_partial ? 1 : 0;
-			const share_percent = flt(values.share_percent);
+			fields: ["name", "posting_date", "down_payment_percentage"],
+			order_by: "posting_date asc, creation asc",
+		})
+		.then((dpi_rows) => {
+			const dp_info_html = format_down_payment_invoice_dialog_html(dpi_rows);
 
-			if (create_partial) {
-				if (share_percent <= 0 || share_percent >= 100) {
-					frappe.throw(__("Bill share (%) must be greater than 0 and less than 100."));
-				}
-			}
+			const dialog = new frappe.ui.Dialog({
+				title: __("Create Sales Invoice"),
+				fields: [
+					{
+						fieldname: "create_partial",
+						fieldtype: "Check",
+						label: __("Create Down Payment Invoice"),
+						default: 1,
+					},
+					{
+						fieldname: "share_percent",
+						fieldtype: "Float",
+						label: __("Bill This Share of Total Order (%)"),
+						precision: 2,
+						depends_on: "eval: doc.create_partial",
+						mandatory_depends_on: "eval: doc.create_partial",
+					},
+					{
+						fieldname: "dp_info",
+						fieldtype: "HTML",
+						options: dp_info_html,
+					},
+					{
+						fieldname: "currency",
+						fieldtype: "Data",
+						hidden: 1,
+						default: frm.doc.currency,
+					},
+					{
+						fieldname: "advance_paid_display",
+						fieldtype: "Currency",
+						label: __("Advance Paid"),
+						read_only: 1,
+						default: flt(frm.doc.advance_paid),
+						options: "currency",
+					},
+				],
+				primary_action_label: __("Create"),
+				primary_action(values) {
+					const create_partial = values.create_partial ? 1 : 0;
+					const share_percent = flt(values.share_percent);
 
-			frappe.model.open_mapped_doc({
-				method: "erpnext_anzahlungsrechnung.scripts.sales_order.make_sales_invoice_from_sales_order",
-				frm: frm,
-				args: {
-					create_partial,
-					share_percent,
+					if (create_partial) {
+						if (share_percent <= 0 || share_percent >= 100) {
+							frappe.throw(
+								__("Bill share (%) must be greater than 0 and less than 100.")
+							);
+						}
+					}
+
+					frappe.model.open_mapped_doc({
+						method: "erpnext_anzahlungsrechnung.scripts.sales_order.make_sales_invoice_from_sales_order",
+						frm: frm,
+						args: {
+							create_partial,
+							share_percent,
+						},
+						freeze: true,
+						freeze_message: create_partial
+							? __("Creating Down Payment Invoice ...")
+							: __("Creating Sales Invoice ..."),
+					});
+					dialog.hide();
 				},
-				freeze: true,
-				freeze_message: create_partial
-					? __("Creating Down Payment Invoice ...")
-					: __("Creating Sales Invoice ..."),
 			});
-			dialog.hide();
-		},
-	});
 
-	dialog.show();
+			dialog.show();
+		})
+		.catch(() => {
+			frappe.msgprint({
+				title: __("Error"),
+				indicator: "red",
+				message: __("Could not load Down Payment Invoices for this Sales Order."),
+			});
+		});
+}
+
+function format_down_payment_invoice_dialog_html(rows) {
+	const title = `<br><p class="small"><strong>${__(
+		"For Information Purposes Only"
+	)}</strong></p>`;
+
+	if (!rows || !rows.length) {
+		return `${title}<p class="text-muted small">${__(
+			"No Down Payment Invoices linked to this Sales Order."
+		)}</p><br><br>`;
+	}
+
+	const head = `<tr><th>${__("Down Payment Invoice")}</th><th>${__("Date")}</th><th>${__(
+		"Percentage"
+	)}</th></tr>`;
+	const body = rows
+		.map((row) => {
+			const date_str = row.posting_date
+				? frappe.datetime.str_to_user(row.posting_date, false, true)
+				: "";
+			const pct = flt(row.down_payment_percentage, 2);
+			const link = frappe.utils.get_form_link("Down Payment Invoice", row.name, true);
+			return `<tr><td>${link}</td><td>${frappe.utils.escape_html(
+				date_str
+			)}</td><td>${frappe.utils.escape_html(String(pct))}&nbsp;%</td></tr>`;
+		})
+		.join("");
+
+	return `${title}<table class="table table-bordered small"><thead>${head}</thead><tbody>${body}</tbody></table>`;
 }
 
 function set_debit_to_from_party_account(frm) {

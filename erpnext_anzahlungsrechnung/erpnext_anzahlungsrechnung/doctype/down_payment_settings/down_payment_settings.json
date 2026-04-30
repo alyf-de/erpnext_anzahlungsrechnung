@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-30 10:04:03.634411",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "default_position_settings_section",
+  "default_position_name",
+  "default_position_description"
+ ],
+ "fields": [
+  {
+   "description": "Used when a <b>Down Payment Invoice</b> is created from a <b>Sales Order</b> (partial bill). Fills <i>Position Name</i> and <i>Position Description</i> on the new invoice. Optional Jinja: <code>{{ doc.fieldname }}</code> where <code>doc</code> is the draft <b>Down Payment Invoice</b> (e.g. <code>sales_order</code>, <code>down_payment_percentage</code>, <code>down_payment_amount</code>, <code>customer</code>, <code>company</code>).",
+   "fieldname": "default_position_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Default Position Settings"
+  },
+  {
+   "default": "Anzahlung",
+   "description": "Default for <i>Position Name</i> on the new invoice. Plain text or Jinja (context: <code>doc</code> = draft <b>Down Payment Invoice</b>). Example: <code>Anzahlungsrechnung</code> or <code>{{ doc.sales_order }}</code>.",
+   "fieldname": "default_position_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Default Position Name",
+   "reqd": 1
+  },
+  {
+   "default": "Es werden {{ doc.down_payment_percentage }} % des Gesamtauftragswerts in Rechnung gestellt.",
+   "description": "Default for <i>Position Description</i> (print / PDF). Rich text and Jinja allowed; same <code>doc</code> as above. Example: <code>Anzahlung ({{ doc.down_payment_percentage }} % of order {{ doc.sales_order }})</code>.",
+   "fieldname": "default_position_description",
+   "fieldtype": "Text Editor",
+   "in_list_view": 1,
+   "label": "Default Position Description",
+   "reqd": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-04-30 10:18:25.110898",
+ "modified_by": "Administrator",
+ "module": "ERPNext Anzahlungsrechnung",
+ "name": "Down Payment Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}

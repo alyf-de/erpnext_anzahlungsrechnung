@@ -105,9 +105,26 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	if not dpi.letter_head:
 		frappe.throw(_("Set Default Letter Head on Company {0}.").format(so.company))
 
-	dpi.position_name = _("Down Payment")
-	dpi.position_description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
-		flt(share, 2)
-	)
+	_apply_default_position_from_settings(dpi)
 
 	return dpi
+
+
+def _apply_default_position_from_settings(dpi):
+	"""Fill *Position Name* / *Position Description* from **Down Payment Settings** (Jinja, `doc` = draft DPI)."""
+	settings = frappe.get_cached_doc("Down Payment Settings")
+	ctx = {"doc": dpi}
+	name_tpl = (settings.default_position_name or "").strip()
+	desc_tpl = (settings.default_position_description or "").strip()
+	if name_tpl:
+		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
+		dpi.position_name = frappe.render_template(name_tpl, ctx)
+	else:
+		dpi.position_name = _("Down Payment")
+	if desc_tpl:
+		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
+		dpi.position_description = frappe.render_template(desc_tpl, ctx)
+	else:
+		dpi.position_description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
+			flt(dpi.down_payment_percentage, 2)
+		)
