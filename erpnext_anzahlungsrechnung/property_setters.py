@@ -7,7 +7,12 @@ def get_property_setters():
 	DocTypes are ordered alphabetically.
 	"""
 	_add_doctype_links()
-	return {}
+	return {
+		"Company": [
+			("book_advance_payments_in_separate_party_account", "default", "0"),
+			("book_advance_payments_in_separate_party_account", "hidden", "1"),
+		],
+	}
 
 
 def _add_doctype_links():

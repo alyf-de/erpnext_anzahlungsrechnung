@@ -87,3 +87,7 @@ The item table uses *Description*, *Tax Rate*, *Net Amount*, and *Tax* (no seria
 
 ```
 
+## Enforced Limitations on ERPNext
+To keep the features of the consistent, we limit some functionalities in ERPNext.
+These are:
+- In **Company** `book_advance_payments_in_separate_party_account` is deactivated, because we have a more profound booking of advance payments.
