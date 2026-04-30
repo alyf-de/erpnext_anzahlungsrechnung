@@ -83,18 +83,6 @@ def _avoid_position_discounts_on_down_payment_invoices(doc):
 	)
 
 
-def _avoid_grand_total_discounts_on_down_payment_sales_order(doc):
-	if doc.custom_invoice_type != "Down Payment Invoice":
-		return
-	if not has_additional_discount_on_grand_total(doc):
-		return
-	frappe.throw(
-		_(
-			"Additional discount on Grand Total is not allowed for Sales Orders with invoice type Down Payment Invoice. Set Apply Additional Discount On to Net Total instead, or remove the discount."
-		)
-	)
-
-
 @frappe.whitelist()
 def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | None = None):
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
