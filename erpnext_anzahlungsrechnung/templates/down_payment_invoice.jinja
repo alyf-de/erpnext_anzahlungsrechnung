@@ -1,0 +1,186 @@
+{% set company = frappe.get_doc("Company", doc.company) %}
+{% set currency = company.default_currency %}
+{% set so = frappe.get_doc("Sales Order", doc.sales_order) %}
+{% set cmp_addr = frappe.get_doc("Address", so.company_address) if so.company_address else None %}
+{% set pay_addr = frappe.get_doc("Address", so.customer_address) if so.customer_address else None %}
+
+{% set tax_rows = get_down_payment_invoice_print_tax_rows(doc.sales_order, doc.down_payment_amount) %}
+{% set dpi_net_total = namespace(v=0) %}
+{% for r in tax_rows %}
+{% set dpi_net_total.v = dpi_net_total.v + frappe.utils.flt(r.net_amount) %}
+{% endfor %}
+
+<!-- HEAD -->
+<div id="header">
+	<div class="letter-head">
+		{{ letter_head }}
+	</div>
+</div>
+
+<div class="contact-row">
+	<div id="address">
+		{% if cmp_addr %}
+		<div id="sender">
+			<p>{{ cmp_addr.address_title }} &#183; {{ cmp_addr.address_line1 }} &#183;
+				{% if cmp_addr.address_line2 %}{{ cmp_addr.address_line2 }} <br>{% endif %}
+				{{ cmp_addr.pincode }} {{ cmp_addr.city }}
+				{% if pay_addr and (cmp_addr.country != pay_addr.country) -%}
+				&#183; {{ cmp_addr.country | upper }}
+				{%- endif %}
+			</p>
+		</div>
+		{% endif %}
+		{{ so.address_display or "" }}
+	</div>
+
+	<div id="contact">
+		<table class="w-100 text-small">
+			{% if company.phone_no %}
+				<tr>
+					<td>{{ _("Phone") }}:</td>
+					<td class="text-right">{{ company.phone_no }}</td>
+				</tr>
+			{% endif %}
+			{% if company.email %}
+				<tr>
+					<td>{{ _("Email") }}:</td>
+					<td class="text-right">{{ company.email }}</td>
+				</tr>
+			{% endif %}
+				<tr>
+					<td>{{ _("Date") }}:</td>
+					<td class="text-right">{{ frappe.utils.formatdate(doc.posting_date, "dd.mm.yyyy") }}</td>
+				</tr>
+			{% if doc.due_date %}
+				<tr>
+					<td>{{ _("Due Date") }}:</td>
+					<td class="text-right">{{ frappe.utils.formatdate(doc.due_date, "dd.mm.yyyy") }}</td>
+				</tr>
+			{% endif %}
+			<tr>
+				<td>{{ _("Sales Order") }}:</td>
+				<td class="text-right">{{ doc.sales_order }}</td>
+			</tr>
+			{% if so.po_no %}
+				<tr>
+					<td>{{ _("Your PO No.") }}:</td>
+					<td class="text-right">{{ so.po_no }}</td>
+				</tr>
+			{% endif %}
+
+			{% set cust_tax_id = frappe.db.get_value("Customer", doc.customer, "tax_id") %}
+			{% if cust_tax_id %}
+				<tr>
+					<td>{{ _("Your Tax ID") }}:</td>
+					<td class="text-right">{{ cust_tax_id }}</td>
+				</tr>
+			{% endif %}
+
+			{% if so.from_date and so.to_date %}
+				<tr>
+					<td>{{ _("Performance Period") }}:</td>
+					{% if so.from_date.year is defined %}
+					{% set date_format = "dd.mm." if so.from_date.year == so.to_date.year else "dd.mm.yy" %}
+					{% else %}
+					{% set date_format = "dd.mm." if so.from_date[:4] == so.to_date[:4] else "dd.mm.yy" %}
+					{% endif %}
+					<td class="text-right">{{ frappe.utils.formatdate(so.from_date, date_format) }} - {{
+						frappe.utils.formatdate(so.to_date, "dd.mm.yyyy") }}</td>
+				</tr>
+			{% endif %}
+		</table>
+	</div>
+</div>
+
+<div id="faltmarke-1" class="din-mark"></div>
+<div id="lochmarke" class="din-mark"></div>
+<div id="faltmarke-2" class="din-mark"></div>
+
+<!-- CONTENT -->
+<div id="text">
+	<div id="subject">
+		{% if doc.amended_from %}
+			<p><strong>{{ _("Cancellation Invoice") }} {{ doc.name }}</strong></p>
+			<p class="text-small">{{ _("Fully cancels and replaces invoice {0}").format(doc.amended_from) }}</p>
+		{% else %}
+			<p><strong>{{ _("Down Payment Invoice") }} {{ doc.name }}</strong></p>
+		{% endif %}
+	</div>
+
+	<table class="w-100 text-small">
+		<thead class="black-border">
+			<tr>
+				<th style="width: 48%">{{ _("Description") }}</th>
+				<th style="width: 12%">{{ _("Tax Rate") }}</th>
+				<th style="width: 20%" class="text-right">{{ _("Net Amount") }}</th>
+				<th style="width: 20%" class="text-right">{{ _("Tax") }}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% if tax_rows %}
+			<tr>
+				<td><b>{{ doc.position_name }}</b><br>{{ doc.position_description }}</td>
+				<td>{{ tax_rows[0].rate_label }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(tax_rows[0].net_amount, currency=currency) }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(tax_rows[0].tax_amount, currency=currency) }}</td>
+			</tr>
+			{% for r in tax_rows[1:] %}
+			<tr>
+				<td></td>
+				<td>{{ r.rate_label }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(r.net_amount, currency=currency) }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(r.tax_amount, currency=currency) }}</td>
+			</tr>
+			{% endfor %}
+			{% else %}
+			<tr>
+				<td colspan="4"><b>{{ doc.position_name }}</b><br>{{ doc.position_description }}</td>
+			</tr>
+			{% endif %}
+		</tbody>
+		<tfoot class="black-border">
+			<tr>
+				<td>{{ _("Net Total") }}</td>
+				<td></td>
+				<td></td>
+				<td class="text-right">{{ frappe.utils.fmt_money(dpi_net_total.v, currency=currency) }}</td>
+			</tr>
+			{% for r in tax_rows -%}
+				{% if r.tax_amount or print_settings.print_taxes_with_zero_amount %}
+					<tr>
+						<td>{{ r.tax_description or (_("Tax") + " " + r.rate_label) }}</td>
+						<td></td>
+						<td></td>
+						<td class="text-right">{{ frappe.utils.fmt_money(r.tax_amount, currency=currency) }}</td>
+					</tr>
+				{% endif %}
+			{%- endfor %}
+			<tr>
+				<td colspan="3"><strong>{{ _("Grand Total") }}</strong></td>
+				<td class="text-right"><strong>{{ doc.get_formatted("down_payment_amount") }}</strong></td>
+			</tr>
+		</tfoot>
+	</table>
+
+	{% if so.incoterm %}
+		<p>{{ _("Terms of delivery") }}: Incoterms® 2020 {{ so.incoterm }}{% if so.named_place %} {{ so.named_place }}{%
+			endif %}</p><br>
+	{% endif %}
+
+	{% if so.terms and (so.terms | striptags) %}
+		<br>
+		{{ so.terms }}
+	{% endif %}
+</div>
+
+<!-- FOOTER -->
+<div id="footer-html" class="visible-pdf">
+	<div class="letter-head-footer">
+		<p id="pagenum">
+			{{ _("Page {0} of {1}").format('<span class="page"></span>', '<span class="topage"></span>') }}
+		</p>
+		<div class="print-format-footer">
+			{{ footer }}
+		</div>
+	</div>
+</div>

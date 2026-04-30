@@ -5,6 +5,23 @@ from frappe import _
 from frappe.utils import cint, flt
 
 
+def has_additional_discount_on_grand_total(doc):
+	"""
+	Throws an error if the document has an additional discount on Grand Total.
+	Only applies to Sales Orders and Sales Invoices with invoice type "Down Payment Invoice" or "Final Invoice".
+	"""
+	if doc.custom_invoice_type not in ["Down Payment Invoice", "Final Invoice"]:
+		return
+	if doc.apply_discount_on != "Grand Total":
+		return
+	if flt(doc.get("additional_discount_percentage")) > 0 or flt(doc.get("discount_amount")) > 0:
+		frappe.throw(
+			_(
+				"Additional discount on Grand Total is not allowed for {0} with invoice type {1}. Set Apply Additional Discount On to Net Total instead, or remove the discount."
+			).format(_(doc.doctype), _(doc.custom_invoice_type))
+		)
+
+
 def require_requested_payments_account(company):
 	"""Ensure Company has Requested Payments account set."""
 	if not get_requested_payments_account(company):
@@ -146,6 +163,7 @@ def insert_and_submit_je(
 	*,
 	sales_invoice=None,
 	payment_entry=None,
+	down_payment_invoice=None,
 ):
 	"""Build a Journal Entry with down-payment trace links, insert and submit."""
 	je = frappe.get_doc(
@@ -159,6 +177,7 @@ def insert_and_submit_je(
 			"accounts": accounts,
 			"custom_dp_sales_invoice": sales_invoice,
 			"custom_dp_payment_entry": payment_entry,
+			"custom_dp_down_payment_invoice": down_payment_invoice,
 		}
 	)
 	je.insert()

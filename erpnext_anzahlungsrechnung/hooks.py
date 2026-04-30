@@ -77,10 +77,11 @@ doctype_js = {"Sales Order": "public/js/sales_order.js"}
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "erpnext_anzahlungsrechnung.utils.jinja_methods",
-# 	"filters": "erpnext_anzahlungsrechnung.utils.jinja_filters"
-# }
+jinja = {
+	"methods": [
+		"erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_tax_allocation",
+	],
+}
 
 # Installation
 # ------------

@@ -10,32 +10,9 @@ def before_print(doc, method, print_settings):
 def prepare_invoice_data_according_to_invoice_type(doc):
 	if doc.custom_invoice_type == "Invoice":
 		_add_tax_rates_to_items(doc)
-	if doc.custom_invoice_type == "Down Payment Invoice":
-		_prepare_down_payment_invoice_data(doc)
-	elif doc.custom_invoice_type == "Final Invoice":
+	if doc.custom_invoice_type == "Final Invoice":
 		_prepare_final_invoice_data(doc)
 		_add_tax_rates_to_items(doc)
-
-
-def _prepare_down_payment_invoice_data(doc):
-	if not doc.custom_summarize_positions or not doc.custom_down_payment_invoice_description:
-		_add_tax_rates_to_items(doc)
-	else:
-		doc.set("items", [])
-		doc.append(
-			"items",
-			{
-				"item_code": "",
-				"item_name": _("Down Payment"),
-				"description": doc.custom_down_payment_invoice_description,
-				"qty": 1,
-				"rate": doc.net_total,
-				"tax_rate": None,
-				"amount": doc.net_total,
-				"discount_percentage": 0,
-				"discount_amount": 0,
-			},
-		)
 
 
 def _prepare_final_invoice_data(doc):

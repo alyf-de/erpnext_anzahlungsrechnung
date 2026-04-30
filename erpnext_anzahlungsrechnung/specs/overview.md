@@ -1,3 +1,7 @@
+# IMPORTANT NOTE
+THIS DESCRIBES OUTDATED REQUIREMENTS AND SOLUTIONS.
+THE FILE IS ONLY KEPT FOR COMPARISON AND DOCUMENTATION PURPOSES AND WILL BE DELETED SOON.
+
 # General
 
 This app supports down payment invoices and their matching final invoices with focus on German legislation.

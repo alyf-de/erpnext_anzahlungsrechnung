@@ -56,6 +56,16 @@ def get_custom_fields():
 				"allow_on_submit": 1,
 				"no_copy": 1,
 			},
+			{
+				"fieldname": "custom_dp_down_payment_invoice",
+				"label": "Down Payment Invoice",
+				"fieldtype": "Link",
+				"insert_after": "custom_dp_payment_entry",
+				"options": "Down Payment Invoice",
+				"read_only": 1,
+				"allow_on_submit": 1,
+				"no_copy": 1,
+			},
 		],
 		"Sales Invoice": [
 			{
@@ -63,7 +73,7 @@ def get_custom_fields():
 				"label": "Invoice Type",
 				"fieldtype": "Select",
 				"insert_after": "posting_date",
-				"options": "Invoice\nDown Payment Invoice\nFinal Invoice",
+				"options": "Invoice\nFinal Invoice",
 				"default": "Invoice",
 				"reqd": 1,
 				"read_only_depends_on": "eval: !doc.__islocal;",
@@ -105,6 +115,32 @@ def get_custom_fields():
 				"reqd": 1,
 				"allow_on_submit": 1,
 				"read_only_depends_on": "eval: doc.per_billed > 0",
+			},
+			{
+				"fieldname": "debit_to",
+				"label": "Debit To",
+				"fieldtype": "Link",
+				"insert_after": "custom_invoice_type",
+				"options": "Account",
+				"depends_on": "eval: doc.custom_invoice_type == 'Down Payment Invoice'",
+				"mandatory_depends_on": "eval: doc.custom_invoice_type == 'Down Payment Invoice'",
+				"description": "Receivable account debited on down payment opening journal entries.",
+				"ignore_user_permissions": 1,
+				"link_filters": (
+					'[["Account", "company", "=", "eval:doc.company"], '
+					'["Account", "account_type", "=", "Receivable"], '
+					'["Account", "is_group", "=", "0"]]'
+				),
+			},
+		],
+		"Sales Order Item": [
+			{
+				"fieldname": "income_account",
+				"label": "Income Account",
+				"fieldtype": "Link",
+				"insert_after": "project",
+				"options": "Account",
+				"description": "Defaults from Item Default (company); used for down payment allocation and final invoice checks.",
 			},
 		],
 	}

@@ -20,7 +20,7 @@
    "in_list_view": 1,
    "label": "Invoice No",
    "no_copy": 1,
-   "options": "Sales Invoice",
+   "options": "Down Payment Invoice",
    "read_only": 1,
    "reqd": 1
   },
@@ -70,7 +70,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-04-15 14:39:54.767569",
+ "modified": "2026-04-29 17:30:00.000000",
  "modified_by": "Administrator",
  "module": "ERPNext Anzahlungsrechnung",
  "name": "Sales Invoice Down Payment",
