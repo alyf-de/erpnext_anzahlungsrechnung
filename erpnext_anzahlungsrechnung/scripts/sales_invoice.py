@@ -240,17 +240,20 @@ def _prevent_position_discounts(doc):
 
 def _validate_final_invoice_income_accounts_match_sales_order(doc):
 	"""Final **Sales Invoice** income account must match **Sales Order Item** ``income_account`` for each linked row."""
-	rows = frappe.get_all(
-		"Sales Order Item",
-		filters={"parent": doc.items[0].sales_order, "parenttype": "Sales Order"},
-		fields=["idx", "item_code", "income_account"],
-	)
+	rows_by_name = {
+		r["name"]: r
+		for r in frappe.get_all(
+			"Sales Order Item",
+			filters={"parent": doc.items[0].sales_order, "parenttype": "Sales Order"},
+			fields=["name", "idx", "item_code", "income_account"],
+		)
+	}
 	for item in doc.items:
 		if not item.so_detail:
 			continue
-		so_row = next((r for r in rows if r.item_code == item.item_code), None)
+		so_row = rows_by_name.get(item.so_detail)
 		if not so_row:
-			frappe.throw(_("Sales Order Item {0} not found.").format(item.item_code))
+			frappe.throw(_("Sales Order Item {0} not found.").format(item.so_detail))
 		if not so_row.get("income_account"):
 			frappe.throw(
 				_(
