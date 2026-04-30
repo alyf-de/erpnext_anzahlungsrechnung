@@ -38,6 +38,24 @@ class DownPaymentInvoice(Document):
 	def on_submit(self):
 		post_down_payment_invoice_submission_journals(self)
 
+	@frappe.whitelist()
+	def refresh_totals_from_sales_order(self):
+		"""Set total_sales_order_amount from the Sales Order grand total and recompute down_payment_amount from down_payment_percentage."""
+		if self.docstatus != 0:
+			frappe.throw(_("Only draft Down Payment Invoices can be refreshed."))
+		frappe.has_permission("Down Payment Invoice", "write", doc=self, throw=True)
+
+		self.total_sales_order_amount = frappe.db.get_value("Sales Order", self.sales_order, "grand_total")
+		self.down_payment_amount = flt(
+			flt(self.down_payment_percentage) * flt(self.total_sales_order_amount) / 100,
+			self.precision("down_payment_amount"),
+		)
+		self.save()
+		return {
+			"total_sales_order_amount": self.total_sales_order_amount,
+			"down_payment_amount": self.down_payment_amount,
+		}
+
 
 def _validate_sales_order_down_payment_flow(doc):
 	"""
@@ -80,7 +98,12 @@ def _validate_sales_order_down_payment_flow(doc):
 	# 5. "Total Sales Order Amount" is not outdated.
 	if flt(doc.total_sales_order_amount) != flt(so_doc.grand_total):
 		frappe.throw(
-			_("The Total Sales Order Amount of the Sales Order {0} is outdated.").format(so_doc.name)
+			_(
+				"The Total Sales Order Amount {0} is outdated. The current Sales Order's total is {1}. Please refresh the down payment invoice with the button on top of the form."
+			).format(
+				fmt_money(doc.total_sales_order_amount, currency=so_doc.currency),
+				fmt_money(so_doc.grand_total, currency=so_doc.currency),
+			)
 		)
 
 

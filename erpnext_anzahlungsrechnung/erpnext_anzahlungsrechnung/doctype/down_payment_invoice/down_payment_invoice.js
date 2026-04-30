@@ -47,6 +47,20 @@ function resync_after_total_change(frm) {
 }
 
 frappe.ui.form.on("Down Payment Invoice", {
+	refresh(frm) {
+		if (!frm.is_new() && frm.doc.docstatus == 0 && frm.doc.sales_order) {
+			frm.add_custom_button(__("Refresh"), () => {
+				frappe.call({
+					doc: frm.doc,
+					method: "refresh_totals_from_sales_order",
+					freeze: true,
+					freeze_message: __("Updating from Sales Order..."),
+					callback: () => frm.reload_doc(),
+				});
+			});
+		}
+	},
+
 	down_payment_amount(frm) {
 		if (frm._syncing_down_payment_fields) {
 			return;
