@@ -61,6 +61,9 @@ We also allocate the taxes respectively and reduce *Requested Payments Account* 
 We want to create **Journal Entries**, that are basically negative from the **Journal Entries** that were done in Step 1 and 2.
 This way we neutralized our interim bookings.
 
+Note: We don't need a validation of matching `debit_to` account between **Sales Order** and **Sales Invoice**,
+because the debit_to accounts of the previous automations will be used anyway – since we just return these previous **Stock Entries**.
+
 ## Print Formats
 
 ...
