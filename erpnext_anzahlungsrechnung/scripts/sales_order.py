@@ -4,16 +4,20 @@ from erpnext.stock.get_item_details import ItemDetailsCtx, get_item_details
 from frappe import _
 from frappe.utils import cint, flt, today
 
+from erpnext_anzahlungsrechnung.scripts.utils import has_additional_discount_on_grand_total
+
 
 def before_validate(doc, event):
 	_sync_income_account_on_sales_order_items(doc)
 	_require_income_account_for_down_payment_sales_order(doc)
 	_avoid_position_discounts_on_down_payment_invoices(doc)
+	has_additional_discount_on_grand_total(doc)
 
 
 def before_update_after_submit(doc, event):
 	if doc.has_value_changed("custom_invoice_type"):
 		_avoid_position_discounts_on_down_payment_invoices(doc)
+		has_additional_discount_on_grand_total(doc)
 
 
 def _sync_income_account_on_sales_order_items(doc):
@@ -74,7 +78,19 @@ def _avoid_position_discounts_on_down_payment_invoices(doc):
 
 	frappe.throw(
 		_(
-			"Position Discounts are not allowed for Orders that will be invoiced as Down Payment Invoices. You can use bulk discounts instead."
+			"Position discounts are not allowed for Sales Orders with invoice type Down Payment Invoice. Use Apply Additional Discount On Net Total if you need an order-level discount."
+		)
+	)
+
+
+def _avoid_grand_total_discounts_on_down_payment_sales_order(doc):
+	if doc.custom_invoice_type != "Down Payment Invoice":
+		return
+	if not has_additional_discount_on_grand_total(doc):
+		return
+	frappe.throw(
+		_(
+			"Additional discount on Grand Total is not allowed for Sales Orders with invoice type Down Payment Invoice. Set Apply Additional Discount On to Net Total instead, or remove the discount."
 		)
 	)
 

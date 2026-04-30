@@ -13,6 +13,7 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 	aggregate_income_by_account,
 	append_je_row,
 	get_company_down_payment_map,
+	has_additional_discount_on_grand_total,
 	insert_and_submit_je,
 	merge_je_account_rows,
 	require_down_payment_accounts_for_income,
@@ -186,6 +187,7 @@ def validate_sales_order_consistency(doc):
 		_prevent_position_discounts(doc)
 		_ensure_final_invoice_completes_sales_order_positions(doc)
 		_validate_final_invoice_income_accounts_match_sales_order(doc)
+		has_additional_discount_on_grand_total(doc)
 
 
 def _avoid_invoice_type_inconsistencies(invoice_type, items):
