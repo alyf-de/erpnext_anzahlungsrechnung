@@ -28,14 +28,8 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 # Passed to new **Journal Entry** documents. ERPNext ``validate`` overwrites ``title`` with
 # ``get_title()`` (first account, etc.), so do **not** look up automation JEs by ``title`` —
 # use ``custom_dp_*`` links instead.
-JE_TITLE_DOWN_PAYMENT_OPENING = "Down Payment Opening"
 JE_TITLE_DOWN_PAYMENT_RECEIPT_CLEARING = "Down Payment Receipt Clearing"
 JE_TITLE_FINAL_INVOICE_DPI_NEUTRALIZATION = "Final Invoice Down Payment Neutralization"
-
-
-def get_receivable_account_for_down_payment_invoice(dpi) -> str:
-	"""Receivable account for Step 1 **Journal Entry** from **Sales Order** ``debit_to``."""
-	return frappe.db.get_value("Sales Order", dpi.sales_order, "debit_to")
 
 
 def get_income_tax_totals_for_down_payment_invoice(dpi):
@@ -99,37 +93,9 @@ def get_down_payment_tax_total(dpi):
 	return flt(sum(tax_totals.values()))
 
 
-def post_down_payment_invoice_submission_journals(dpi) -> str:
-	"""Step 1: Dr receivable, Cr *Requested Payments Account* (single **Journal Entry**)."""
-	require_requested_payments_account(dpi.company)
-	requested_acc = get_requested_payments_account(dpi.company)
-	receivable = get_receivable_account_for_down_payment_invoice(dpi)
-	grand = flt(dpi.down_payment_amount)
-
-	rows = []
-	append_je_row(
-		rows,
-		receivable,
-		grand,
-		0,
-		None,
-		None,
-		party_type="Customer",
-		party=dpi.customer,
-	)
-	append_je_row(rows, requested_acc, 0, grand, None, None)
-
-	je = insert_and_submit_je(
-		dpi.company,
-		dpi.posting_date,
-		rows,
-		_("Down payment opening for {0}").format(dpi.name),
-		JE_TITLE_DOWN_PAYMENT_OPENING,
-		sales_invoice=None,
-		payment_entry=None,
-		down_payment_invoice=dpi.name,
-	)
-	return je.name
+def post_down_payment_invoice_submission_journals(dpi) -> None:
+	"""Step 1: no **Journal Entry** automation (see product spec)."""
+	return None
 
 
 def cancel_down_payment_invoice_journals(dpi):
@@ -176,21 +142,6 @@ def get_submitted_payment_entries_linked_via_clearing_journal(dpi_name: str) -> 
 	return list(dict.fromkeys(n for n in names if n))
 
 
-def opening_journal_exists_for_down_payment_invoice(dpi_name: str) -> bool:
-	return bool(
-		frappe.get_all(
-			"Journal Entry",
-			filters=[
-				["custom_dp_down_payment_invoice", "=", dpi_name],
-				["docstatus", "=", 1],
-				["custom_dp_sales_invoice", "is", "not set"],
-				["custom_dp_payment_entry", "is", "not set"],
-			],
-			limit=1,
-		)
-	)
-
-
 def aggregate_tax_amounts_for_down_payment_invoice(dpi):
 	"""``(tax_account, base_amount, cost_center)`` list for splitting payment tax pool (like **Sales Invoice** ``get_tax_amounts``)."""
 	_, tax_totals, _, _, tax_cc = get_income_tax_totals_for_down_payment_invoice(dpi)
@@ -230,7 +181,7 @@ def fifo_split_sales_order_payment_to_dpis(
 ) -> list[tuple[str, float]]:
 	"""
 	Split a **Payment Entry** allocation against **Sales Order** across submitted **Down Payment Invoice**
-	documents FIFO by ``posting_date``, ``creation``. Each slice is capped by remaining opening capacity on that DPI.
+	documents FIFO by ``posting_date``, ``creation``. Each slice is capped by remaining clearing capacity on that DPI.
 	"""
 	alloc_base = flt(alloc_base)
 	if not alloc_base:
@@ -353,13 +304,14 @@ def build_down_payment_receipt_clearing_journal_accounts(
 
 
 def get_interim_journal_entry_names_for_down_payment_invoice(dpi_name: str) -> list[str]:
-	"""Submitted Step 1 and Step 2 automation **Journal Entry** names for this DPI (chronological)."""
+	"""Submitted Step 2 (receipt-clearing) automation **Journal Entry** names for this DPI (chronological)."""
 	return frappe.get_all(
 		"Journal Entry",
 		filters=[
 			["custom_dp_down_payment_invoice", "=", dpi_name],
 			["docstatus", "=", 1],
 			["custom_dp_sales_invoice", "is", "not set"],
+			["custom_dp_payment_entry", "is", "set"],
 		],
 		pluck="name",
 		order_by="creation asc",
@@ -404,16 +356,12 @@ def build_reversed_journal_rows_from_entries(je_names: list[str]) -> list[dict]:
 
 
 def post_final_invoice_down_payment_neutralization_journals(si) -> str | None:
-	"""Step 3-4: For each linked DPI, post one **Journal Entry** that reverses opening + receipt-clearing interim bookings."""
+	"""Step 3: For each linked DPI, post one **Journal Entry** that reverses Step 2 receipt-clearing bookings."""
 	last_je = None
 	for dp in si.get("custom_down_payments") or []:
 		dpsi = frappe.get_doc("Down Payment Invoice", dp.invoice_no)
 		if dpsi.docstatus != 1:
 			frappe.throw(_("Down payment invoice {0} must be submitted.").format(dp.invoice_no))
-		if not opening_journal_exists_for_down_payment_invoice(dp.invoice_no):
-			frappe.throw(
-				_("Down payment invoice {0} has no opening journal entry yet.").format(dp.invoice_no)
-			)
 
 		je_names = get_interim_journal_entry_names_for_down_payment_invoice(dp.invoice_no)
 		if not je_names:

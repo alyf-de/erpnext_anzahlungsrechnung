@@ -116,16 +116,8 @@ msgstr ""
 msgid "Down Payment Percentage must be less than 100."
 msgstr ""
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:415
-msgid "Down payment invoice {0} has no opening journal entry yet."
-msgstr ""
-
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:412
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:364
 msgid "Down payment invoice {0} must be submitted."
-msgstr ""
-
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:126
-msgid "Down payment opening for {0}"
 msgstr ""
 
 #: erpnext_anzahlungsrechnung/scripts/payment_entry.py:77

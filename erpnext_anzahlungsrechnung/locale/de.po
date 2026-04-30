@@ -117,17 +117,9 @@ msgstr "Anzahlungsprozentsatz"
 msgid "Down Payment Percentage must be less than 100."
 msgstr "Anzahlungsprozentsatz muss kleiner als 100 sein."
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:415
-msgid "Down payment invoice {0} has no opening journal entry yet."
-msgstr "Für Anzahlungsrechnung {0} existiert noch kein Eröffnungsbuchungssatz."
-
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:412
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:364
 msgid "Down payment invoice {0} must be submitted."
 msgstr "Anzahlungsrechnung {0} muss gebucht sein."
-
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:126
-msgid "Down payment opening for {0}"
-msgstr "Anzahlungseröffnung für {0}"
 
 #: erpnext_anzahlungsrechnung/scripts/payment_entry.py:77
 msgid "Down payment receipt clearing for {0} ({1})"
