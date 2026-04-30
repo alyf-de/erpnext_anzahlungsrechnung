@@ -1,6 +1,6 @@
 # Intro
 
-We use following formation:
+We use the following conventions:
 
 - DocType names: bold
 - Fieldnames: auto
@@ -11,8 +11,7 @@ Example: In the **Sales Invoice** we set the default for *Incoterm* (`incoterm`)
 
 # Overview
 
-This apps provides a new
-It consists of following main features:
+This app adds a **Down Payment Invoice** flow on top of ERPNext. It consists of the following main features:
 
 - New DocType: **Down Payment Invoice**
 - Adjusted **Print Format** for **Down Payment Invoice** and **Sales Invoice**
@@ -33,27 +32,27 @@ This involves:
 |                                                   | Forderungen (S) | Bank (S) | Ertrag 19% (H) | Ertrag 7% (H) | Steuer 19% (H) | Steuer 7% (H) | Erhaltene Anzahlungen 19% (H) | Erhaltene Anzahlungen 7% (H) | Anzahlungsanforderungen (H) |
 | ------------------------------------------------- | --------------- | -------- | -------------- | ------------- | -------------- | ------------- | ----------------------------- | ---------------------------- | --------------------------- |
 | Step 1: **Down Payment Invoice** is submitted     |                 |          |                |               |                |               |                               |                              |                             |
-| -> Automization for Step 1                        | 1130            |          |                |               |                |               |                               |                              | 1130                        |
+| -> Automation for Step 1                          | 1130            |          |                |               |                |               |                               |                              | 1130                        |
 | Step 2: **Payment Entry** against **Sales Order** | -565            | 565      |                |               |                |               |                               |                              |                             |
 | -> Automation for Step 2                          |                 |          |                |               | 17.5           | 47.5          | 250                           | 250                          | -565                        |
 | Step 3: Final Invoice                             | 2260            |          | 1000           | 1000          | 190            | 70            |                               |                              |                             |
-| -> Automization for Step 3                        |                 |          |                |               | -17.5          | -47.5         | -250                          | -250                         | 565                         |
-| -> Automization for Step 4                        | -1130           |          |                |               |                |               |                               |                              | -1130                       |
+| -> Automation for Step 3                          |                 |          |                |               | -17.5          | -47.5         | -250                          | -250                         | 565                         |
+| -> Automation for Step 4                        | -1130           |          |                |               |                |               |                               |                              | -1130                       |
 
 
 ### Automations
 
 #### Step 1
 
-Create a **Journal Entry** that is linked to the **Down Payment Entry**.
+Create a **Journal Entry** that is linked to the **Down Payment Invoice**.
 It should create debit to the customer via **Sales Order** `debit_to` (same field name as **Sales Invoice**) when _Invoice Type_ is Down Payment Invoice.
-This amount is transfered to the account *Requested Payments Account* (which is set in **Company**).
-Summary: After Step 1 only one simple **Journal Entry** was creted, since the **Down Payment Invoice** does not touch more that we need to "cleanse".
+This amount is transferred to the account *Requested Payments Account* (which is set in **Company**).
+Summary: After Step 1 only one simple **Journal Entry** was created, since the **Down Payment Invoice** does not touch more than we need to "cleanse".
 
 #### Step 2
 
 Allocate paid amount proportionally and as net sum to *Received Down Payment Account* (see child table in **Company**)
-Therefere, we need an *Income Account* in **Sales Order Item**. These shouldn't differ from the ones in Final **Sales Invoice**.
+Therefore, we need an *Income Account* in **Sales Order Item**. These shouldn't differ from the ones in Final **Sales Invoice**.
 We also allocate the taxes respectively and reduce *Requested Payments Account* (see **Company**).
 
 #### Step 3
@@ -62,7 +61,7 @@ We want to create **Journal Entries**, that are basically negative from the **Jo
 This way we neutralized our interim bookings.
 
 Note: We don't need a validation of matching `debit_to` account between **Sales Order** and **Sales Invoice**,
-because the debit_to accounts of the previous automations will be used anyway – since we just return these previous **Stock Entries**.
+because the debit_to accounts of the previous automations will be used anyway – since we just reverse these previous **Journal Entries**.
 
 ## Print Formats
 

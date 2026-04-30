@@ -63,7 +63,7 @@ def _validate_sales_order_down_payment_flow(doc):
 	- Sales Order's invoice type is "Down Payment Invoice".
 	- Sales Order is submitted.
 	- Sales Order is not billed.
-	- Outstanding amount is smaller than the requested down payment amount.
+	- Requested down payment does not exceed the Sales Order outstanding (grand total - advance paid).
 	- "Total Sales Order Amount" is not outdated.
 	"""
 	so_doc = frappe.get_doc("Sales Order", doc.sales_order)

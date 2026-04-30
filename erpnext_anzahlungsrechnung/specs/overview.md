@@ -31,7 +31,7 @@ The **Sales Invoice** has a specific jinja method for transforming the data to b
 Details:
 
 - Invoice: Nothing special
-- Down Payment Invoice: Here we manipulate the items table if the checkbox `custom_summarize_positions` is checked.
+- Down Payment Invoice: handled via the separate **Down Payment Invoice** DocType (print / tax allocation); no longer a **Sales Invoice** type.
 - Final Invoice: Here we replace the items of the object doc with the **Sales Order Items**. Furthermore, we show the Down Payment Invoices against the **Sales Order**.
 
 ## Accounting
