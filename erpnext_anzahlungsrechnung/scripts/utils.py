@@ -5,7 +5,7 @@ from frappe import _
 from frappe.utils import cint, flt
 
 
-def has_additional_discount_on_grand_total(doc) -> bool:
+def has_additional_discount_on_grand_total(doc):
 	"""
 	Throws an error if the document has an additional discount on Grand Total.
 	Only applies to Sales Orders and Sales Invoices with invoice type "Down Payment Invoice" or "Final Invoice".
