@@ -21,7 +21,6 @@ from erpnext_anzahlungsrechnung.scripts.utils import (
 
 
 def before_validate(doc, event):
-	validate_consistent_currency(doc)
 	validate_sales_order_consistency(doc)
 	append_down_payment_invoice_to_final_invoice(doc)
 
@@ -119,7 +118,7 @@ def on_submit(doc, event):
 		post_final_invoice_down_payment_neutralization_journals(doc)
 
 
-def validate_consistent_currency(doc):
+def _validate_consistent_currency(doc):
 	"""
 	Ensure the currency of the Sales Invoice is consistent with the currencies of:
 	Sales Order, Taxes and Income Accounts, Sales Invoice Currency, Debit To Currency.
@@ -184,6 +183,7 @@ def validate_sales_order_consistency(doc):
 	if doc.custom_invoice_type == "Final Invoice":
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
+		_validate_consistent_currency(doc)
 		_prevent_position_discounts(doc)
 		_ensure_final_invoice_completes_sales_order_positions(doc)
 		_validate_final_invoice_income_accounts_match_sales_order(doc)
