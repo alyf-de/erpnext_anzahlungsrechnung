@@ -177,7 +177,7 @@ def validate_sales_order_consistency(doc):
 
 	if doc.return_against:
 		_ensure_invoice_type_consistency_for_returns(doc.return_against, doc.custom_invoice_type)
-		_validate_updation_of_sales_order_billed_amount(
+		_validate_update_of_sales_order_billed_amount(
 			doc.custom_invoice_type, doc.update_billed_amount_in_sales_order
 		)
 
@@ -210,7 +210,7 @@ def _ensure_invoice_type_consistency_for_returns(return_against, invoice_type):
 		frappe.throw(_("The Invoice Type of the Return must match the Invoice Type of the original Invoice."))
 
 
-def _validate_updation_of_sales_order_billed_amount(invoice_type, update_billed_amount):
+def _validate_update_of_sales_order_billed_amount(invoice_type, update_billed_amount):
 	"""Require billed amount updates for final invoice returns."""
 	if invoice_type == "Final Invoice" and not update_billed_amount:
 		frappe.throw(
