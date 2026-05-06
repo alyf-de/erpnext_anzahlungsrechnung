@@ -135,7 +135,7 @@ def _validate_company_down_payment_mapping(doc):
 
 
 @frappe.whitelist()
-def make_payment_entry(source_name: str, reference_date=None):
+def make_payment_entry(source_name: str, reference_date: str | None = None):
 	"""Same as **Sales Order** > **Create** > **Payment** for the linked order, with *Paid Amount* set to this invoice's *Down Payment Amount*."""
 	frappe.has_permission("Payment Entry", "create", throw=True)
 	dpi = frappe.get_doc("Down Payment Invoice", source_name)
