@@ -59,6 +59,14 @@ frappe.ui.form.on("Down Payment Invoice", {
 				});
 			});
 		}
+
+		if (frm.doc.docstatus === 1 && frappe.model.can_create("Payment Entry")) {
+			frm.add_custom_button(
+				__("Payment"),
+				() => make_down_payment_invoice_payment_entry(frm),
+				__("Create")
+			);
+		}
 	},
 
 	down_payment_amount(frm) {
@@ -83,3 +91,17 @@ frappe.ui.form.on("Down Payment Invoice", {
 		resync_after_total_change(frm);
 	},
 });
+
+function make_down_payment_invoice_payment_entry(frm) {
+	frappe.call({
+		method: "erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice.make_payment_entry",
+		args: { source_name: frm.doc.name },
+		callback(r) {
+			if (!r.message) {
+				return;
+			}
+			const doclist = frappe.model.sync(r.message);
+			frappe.set_route("Form", doclist[0].doctype, doclist[0].name);
+		},
+	});
+}
