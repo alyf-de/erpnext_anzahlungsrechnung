@@ -224,7 +224,7 @@
 				<td class="text-right"><strong>{{ doc.get_formatted("grand_total") }}</strong>
 				</td>
 			</tr>
-			{% if doc.total_advance %}
+			{% if doc.total_advance and not (doc.get("custom_invoice_type") == "Final Invoice" and doc.get("custom_down_payments")) %}
 				<tr>
 					<td></td>
 					<td>{{ _("Total Advance") }}</td>
@@ -253,33 +253,41 @@
 				<tr class="prior-down-payments-wrap">
 					<td colspan="{{ 7 if show_tax_rate_col else 6 }}" class="prior-down-payments-cell" style="padding-top: 0.35rem;">
 						<table class="w-100 text-small prior-down-payments-subtable" style="table-layout: fixed; width: 100%;">
-							<colgroup>
-								<col style="width: 24%" />
-								<col style="width: 14%" />
-								<col style="width: 20%" />
-								<col style="width: 20%" />
-								<col style="width: 22%" />
-							</colgroup>
 							<tbody>
 								<tr class="prior-down-payments-header">
-									<td colspan="5"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
+									<td colspan="6"><strong>{{ _("Prior Down Payment Invoices") }}</strong></td>
 								</tr>
 								<tr>
-									<td>{{ _("Invoice No.") }}</td>
-									<td>{{ _("Paid On") }}</td>
-									<td class="text-right">{{ _("Net Amount") }}</td>
-									<td class="text-right">{{ _("Tax Amount") }}</td>
-									<td class="text-right">{{ _("Grand Total") }}</td>
+									<td style="width: 18%">{{ _("Invoice No.") }}</td>
+									<td style="width: 15%" class="text-right">{{ _("Net Amount") }}</td>
+									<td style="width: 15%" class="text-right">{{ _("Tax Amount") }}</td>
+									<td style="width: 15%" class="text-right">{{ _("Grand Total") }}</td>
+									<td style="width: 19%">{{ _("Paid On") }}</td>
+									<td style="width: 18%" class="text-right">{{ _("Paid Amount") }}</td>
 								</tr>
-								{% for dp in doc.custom_down_payments %}
+								{% for row in doc.prior_down_payment_print_rows or [] %}
 									<tr class="prior-down-payment-row">
-										<td>{{ dp.invoice_no }}</td>
-										<td>{% if dp.payment_date %}{{ frappe.utils.formatdate(dp.payment_date, "dd.mm.yyyy") }}{% endif %}</td>
-										<td class="text-right">{{ frappe.utils.fmt_money(dp.net_total, currency=doc.currency) }}</td>
-										<td class="text-right">{{ frappe.utils.fmt_money(dp.tax_amount, currency=doc.currency) }}</td>
-										<td class="text-right">{{ frappe.utils.fmt_money(dp.grand_total, currency=doc.currency) }}</td>
+										{% if row.show_invoice_amounts %}
+											<td>{{ row.invoice_no }}</td>
+											<td class="text-right">{{ frappe.utils.fmt_money(row.net_total, currency=doc.currency) }}</td>
+											<td class="text-right">{{ frappe.utils.fmt_money(row.tax_amount, currency=doc.currency) }}</td>
+											<td class="text-right">{{ frappe.utils.fmt_money(row.grand_total, currency=doc.currency) }}</td>
+										{% else %}
+											<td></td>
+											<td></td>
+											<td></td>
+											<td></td>
+										{% endif %}
+										<td>{% if row.paid_on %}{{ frappe.utils.formatdate(row.paid_on, "dd.mm.yyyy") }}{% else %}-{% endif %}</td>
+										<td class="text-right">{% if row.paid_amount is not none %}{{ frappe.utils.fmt_money(row.paid_amount, currency=doc.currency) }}{% else %}-{% endif %}</td>
 									</tr>
 								{% endfor %}
+								{% if doc.total_advance %}
+									<tr class="prior-down-payments-total-advance">
+										<td colspan="5"><strong>{{ _("Total Advance") }}</strong></td>
+										<td class="text-right"><strong>{{ doc.get_formatted("total_advance") }}</strong></td>
+									</tr>
+								{% endif %}
 							</tbody>
 						</table>
 					</td>

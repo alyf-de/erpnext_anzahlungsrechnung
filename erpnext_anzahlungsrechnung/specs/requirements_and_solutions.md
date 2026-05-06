@@ -60,7 +60,36 @@ because the debit_to accounts of the previous automations will be used anyway �
 
 ## Print Formats
 
-...
+### Sales Invoice (Type: Final Invoice)
+In the section "prior invoices" we need following columns:
+- "Invoice No"
+- "Net Amount"
+- "Tax Amount"
+- "Grand Total"
+- "Paid On"
+- "Paid Amount"
+
+The main challenge with these columns is to assign **Payment Entries** to **Down Payment Invoices**.
+Here is a solution for that:
+
+- Consider each **Payment Entry** from **Sales Invoice**'s child table in `advances`.
+- Assign the **Payment Entries** by date to a **Down Payment Entry**
+
+#### Edge Cases
+NOTE: There can be following three edge cases:
+- Paid amount is less than invoiced amount -> No problem!
+- Nothing was paid for a certain Down Payment Invoice -> No problem!
+- There are two payments against one **Down Payment Invoice** -> Show them in two rows.
+- No payment -> Show "-" in "Paid On" and "Paid Amount"
+
+#### Example
+- **Down Payment Invoices**
+  1) 1000€ on 01.04.
+  2) 1000€ on 16.04.
+- **Payment Entries**
+  1) **Payment Entry** on 02.04. -> Assigned to first invoice
+  2) **Payment Entry** on 15.04. -> Assigned to first invoice
+  3) **Payment Entry** on 16.04. -> Assigned to second invoice
 
 ## Proportional tax on down payments
 
