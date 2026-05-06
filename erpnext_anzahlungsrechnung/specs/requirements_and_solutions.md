@@ -116,6 +116,11 @@ The item table uses *Description*, *Tax Rate*, *Net Amount*, and *Tax* (no seria
 
 ```
 
+## Supporting Features
+### Create Payments from Down Payment Invoice
+In the form view of **Down Payment Invoice** is a button ("Create" > "Payment") that opens a **Payment Entry**.
+It works as the button in **Sales Order**. Only difference is, that the paid amount equals the **Down Payment Invoice**'s amount.
+
 ## Enforced Limitations on ERPNext
 To keep the features of the consistent, we limit some functionalities in ERPNext.
 These are:

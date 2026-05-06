@@ -132,3 +132,23 @@ def _validate_company_down_payment_mapping(doc):
 	income_totals, _, _, _, _ = get_income_tax_totals_for_down_payment_invoice(doc)
 	if income_totals:
 		require_down_payment_accounts_for_income(doc.company, income_totals.keys())
+
+
+@frappe.whitelist()
+def make_payment_entry(source_name: str, reference_date=None):
+	"""Same as **Sales Order** > **Create** > **Payment** for the linked order, with *Paid Amount* set to this invoice's *Down Payment Amount*."""
+	frappe.has_permission("Payment Entry", "create", throw=True)
+	dpi = frappe.get_doc("Down Payment Invoice", source_name)
+	if dpi.docstatus != 1:
+		frappe.throw(_("Submit the Down Payment Invoice before creating a payment."))
+	if not dpi.sales_order:
+		frappe.throw(_("Sales Order is required."))
+
+	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
+
+	return get_payment_entry(
+		"Sales Order",
+		dpi.sales_order,
+		party_amount=flt(dpi.down_payment_amount),
+		reference_date=reference_date,
+	)
