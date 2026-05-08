@@ -193,6 +193,8 @@ doc_events = {
 
 override_doctype_class = {
 	"Payment Terms Template": "erpnext_anzahlungsrechnung.overrides.payment_terms_template.PaymentTermsTemplate",
+	"Quotation": "erpnext_anzahlungsrechnung.overrides.quotation.Quotation",
+	"Sales Order": "erpnext_anzahlungsrechnung.overrides.sales_order.SalesOrder",
 }
 
 # Overriding Methods
