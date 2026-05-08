@@ -109,6 +109,17 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	_apply_default_position_from_settings(dpi, settings)
 	dpi.due_date = frappe.utils.add_to_date(frappe.utils.getdate(), days=settings.credit_days)
 
+	# Set project if custom field exists
+	if frappe.db.exists(
+		"Custom Field",
+		{
+			"dt": "Down Payment Invoice",
+			"fieldtype": "Link",
+			"options": "Project",
+			"fetch_from": "sales_order.project",
+		},
+	):
+		dpi.custom_project = so.project
 	return dpi
 
 
