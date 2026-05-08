@@ -3,7 +3,7 @@ from erpnext.selling.doctype.quotation.quotation import make_sales_order as erpn
 
 
 @frappe.whitelist()
-def make_sales_order(source_name, target_doc=None, args=None):
+def make_sales_order(source_name: str, target_doc: dict | None = None, args: dict | None = None):
 	doc = erpnext_make_sales_order(source_name, target_doc=target_doc, args=args)
 	if doc.meta.get_field("custom_invoice_type") and doc.custom_invoice_type == "Invoice":
 		if frappe.db.count("Payment Schedule", {"parent": source_name, "parenttype": "Quotation"}) > 1:
