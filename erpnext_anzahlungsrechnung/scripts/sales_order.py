@@ -1,8 +1,9 @@
 import frappe
+from erpnext.controllers.accounts_controller import get_discount_date, get_due_date
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice as erpnext_make_sales_invoice
 from erpnext.stock.get_item_details import ItemDetailsCtx, get_item_details
 from frappe import _
-from frappe.utils import cint, flt, today
+from frappe.utils import cint, flt, getdate, today
 
 from erpnext_anzahlungsrechnung.scripts.utils import has_additional_discount_on_grand_total
 
@@ -73,7 +74,8 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
 	args = frappe.flags.args or frappe._dict()
 	create_partial = cint(args.get("create_partial", 1))
-	share = flt(args.get("share_percent", 100))
+	set_share_manually = cint(args.get("set_share_manually", 1))
+	payment_schedule_row = args.get("payment_schedule_row")
 
 	so = frappe.get_doc("Sales Order", source_name)
 	if so.docstatus != 1:
@@ -85,11 +87,27 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		frappe.has_permission("Sales Invoice", "create", throw=True)
 		doc = erpnext_make_sales_invoice(source_name, target_doc=target_doc, ignore_permissions=False)
 		doc.set("custom_invoice_type", "Final Invoice")
+		_apply_final_invoice_payment_schedule_from_sales_order(so, doc)
 		return doc
 
 	frappe.has_permission("Down Payment Invoice", "create", throw=True)
-	if not (0 < share < 100):
-		frappe.throw(_("Bill share (%) must be greater than 0 and less than 100."))
+
+	if set_share_manually:
+		share = flt(args.get("share_percent", 0))
+		if not (0 < share < 100):
+			frappe.throw(_("Bill share (%) must be greater than 0 and less than 100."))
+	else:
+		if not payment_schedule_row:
+			frappe.throw(_("Select a payment plan row (invoice portion)."))
+		ps_list = so.get("payment_schedule") or []
+		ps_row = next((r for r in ps_list if r.name == payment_schedule_row), None)
+		if not ps_row:
+			frappe.throw(_("The payment plan row does not belong to this Sales Order."))
+		if ps_list and ps_row.name == ps_list[-1].name:
+			frappe.throw(_("The last payment plan row is reserved for the Final Invoice."))
+		share = flt(ps_row.invoice_portion)
+		if not (0 < share < 100):
+			frappe.throw(_("Invoice portion from the payment plan must be greater than 0 and less than 100."))
 
 	dpi = frappe.new_doc("Down Payment Invoice")
 	dpi.sales_order = source_name
@@ -121,6 +139,84 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	):
 		dpi.custom_project = so.project
 	return dpi
+
+
+def _apply_final_invoice_payment_schedule_from_sales_order(so, si):
+	"""Replace **Sales Invoice** *Payment Schedule* with a single row copied from the last **Sales Order** row at 100%."""
+	ps = so.get("payment_schedule") or []
+	if not ps:
+		return
+	last = ps[-1]
+	for d in list(si.get("payment_schedule") or []):
+		si.remove(d)
+
+	posting_date = si.posting_date or today()
+	bill_date = si.get("bill_date") or posting_date
+	auto_terms = cint(frappe.get_single_value("Accounts Settings", "automatically_fetch_payment_terms"))
+
+	row = {
+		"payment_term": last.payment_term,
+		"description": last.description,
+		"mode_of_payment": last.mode_of_payment,
+		"invoice_portion": 100,
+		"paid_amount": 0,
+	}
+	if auto_terms and last.get("due_date_based_on"):
+		row["due_date_based_on"] = last.due_date_based_on
+		row["credit_days"] = cint(last.credit_days)
+		row["credit_months"] = cint(last.credit_months)
+		row["due_date"] = get_due_date(last, posting_date, bill_date) or getdate(posting_date)
+	else:
+		row["due_date"] = last.due_date or getdate(posting_date)
+
+	if last.get("discount_validity_based_on"):
+		row["discount_validity_based_on"] = last.discount_validity_based_on
+		row["discount_validity"] = cint(last.discount_validity)
+		if auto_terms:
+			dd = get_discount_date(last, posting_date, bill_date)
+			if dd:
+				row["discount_date"] = dd
+		elif last.get("discount_date"):
+			row["discount_date"] = last.discount_date
+
+	if last.get("discount_type") == "Percentage":
+		row["discount_type"] = last.discount_type
+		row["discount"] = flt(last.discount)
+
+	grand_total, base_grand_total = _payment_schedule_grand_totals_for_final_invoice(si)
+	pay_prec = frappe.get_meta("Payment Schedule").get_field("payment_amount").precision or 2
+	row["payment_amount"] = flt(grand_total, pay_prec)
+	row["base_payment_amount"] = flt(base_grand_total, pay_prec)
+	row["outstanding"] = row["payment_amount"]
+	row["base_outstanding"] = row["base_payment_amount"]
+
+	si.append("payment_schedule", row)
+	si.payment_terms_template = so.payment_terms_template
+	si.run_method("set_due_date")
+
+
+def _payment_schedule_grand_totals_for_final_invoice(si):
+	"""Grand totals used for *payment_amount* / *base_payment_amount*, aligned with payment schedule validation."""
+	base_grand_total = flt(si.get("base_rounded_total") or si.base_grand_total) - flt(
+		si.base_write_off_amount or 0
+	)
+	grand_total = flt(si.get("rounded_total") or si.grand_total) - flt(si.write_off_amount or 0)
+	party_account_currency = si.get("party_account_currency")
+	if not party_account_currency:
+		from erpnext.accounts.party import get_party_account_currency
+
+		party_account_currency = get_party_account_currency("Customer", si.customer, si.company)
+	if si.get("total_advance"):
+		if party_account_currency == si.company_currency:
+			base_grand_total -= flt(si.total_advance)
+			if flt(si.get("conversion_rate")):
+				grand_total = flt(base_grand_total / si.conversion_rate, si.precision("grand_total"))
+		else:
+			grand_total -= flt(si.total_advance)
+			base_grand_total = flt(
+				grand_total * flt(si.get("conversion_rate")), si.precision("base_grand_total")
+			)
+	return grand_total, base_grand_total
 
 
 def _apply_default_position_from_settings(dpi, settings):

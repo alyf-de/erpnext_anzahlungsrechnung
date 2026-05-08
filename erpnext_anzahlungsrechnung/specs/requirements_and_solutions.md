@@ -125,3 +125,12 @@ It works as the button in **Sales Order**. Only difference is, that the paid amo
 To keep the features of the consistent, we limit some functionalities in ERPNext.
 These are:
 - In **Company** `book_advance_payments_in_separate_party_account` is deactivated, because we have a more profound booking of advance payments.
+
+## Payment schedule and **Payment Terms Template**
+
+Purpose:
+*Payment Schedule* on **Quotation** / **Sales Order** can describe several installments (earlier rows for down payments, last row for the final invoice). Billing can use a row’s *Invoice portion* instead of typing a %, the create-invoice dialog shows schedule context and linked **Down Payment Invoice** *Status*, and the final **Sales Invoice** can take payment terms from the last schedule row. **Quotation** → **Sales Order** can default to down-payment mode when the quotation has more than one schedule line. **Quotation** / **Sales Order** also allow duplicate *Due Date* values on schedule rows where ERPNext would block them, so equal due dates on different installments are possible.
+
+Payment Terms Template override:
+ERPNext warns when two template lines share the same payment term + credit metadata; we skip that check so repeated credit windows on separate lines are allowed.
+Caveat: the override is site-wide—every **Payment Terms Template** loses that duplicate warning while the app is installed.
