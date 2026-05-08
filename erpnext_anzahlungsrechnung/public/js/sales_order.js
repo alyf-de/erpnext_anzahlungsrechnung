@@ -155,9 +155,9 @@ function open_down_payment_sales_invoice_dialog(frm, dpi_rows) {
 			label: __("Bill This Share of Total Order (%)"),
 			precision: 2,
 			depends_on:
-				"eval: doc.create_partial && (doc.has_payment_schedule == 0 || doc.set_share_manually)",
+				"eval: doc.create_partial && (doc.has_payment_schedule != 1 || doc.set_share_manually)",
 			mandatory_depends_on:
-				"eval: doc.create_partial && (doc.has_payment_schedule == 0 || doc.set_share_manually)",
+				"eval: doc.create_partial && (doc.has_payment_schedule != 1 || doc.set_share_manually)",
 		},
 		{
 			fieldname: "dp_info",
