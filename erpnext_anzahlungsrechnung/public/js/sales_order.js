@@ -25,7 +25,13 @@ frappe.ui.form.on("Sales Order", {
 });
 
 function payment_schedule_rows_for_down_payment(frm) {
-	return (frm.doc.payment_schedule || []).filter(
+	const rows = frm.doc.payment_schedule || [];
+	if (!rows.length) {
+		return [];
+	}
+	// Last row is reserved for the Final Invoice; only earlier rows are offered for down payments.
+	const before_final = rows.slice(0, -1);
+	return before_final.filter(
 		(row) => flt(row.invoice_portion) > 0 && flt(row.invoice_portion) < 100
 	);
 }
