@@ -24,6 +24,12 @@ frappe.ui.form.on("Sales Order", {
 	},
 });
 
+function payment_schedule_rows_for_down_payment(frm) {
+	return (frm.doc.payment_schedule || []).filter(
+		(row) => flt(row.invoice_portion) > 0 && flt(row.invoice_portion) < 100
+	);
+}
+
 function show_down_payment_sales_invoice_dialog(frm) {
 	frappe.db
 		.get_list("Down Payment Invoice", {
@@ -36,54 +42,102 @@ function show_down_payment_sales_invoice_dialog(frm) {
 		})
 		.then((dpi_rows) => {
 			const dp_info_html = format_down_payment_invoice_dialog_html(dpi_rows);
+			const valid_ps_rows = payment_schedule_rows_for_down_payment(frm);
+			const has_ps = valid_ps_rows.length > 0;
+			const ps_select_options = valid_ps_rows.map((row) => ({
+				value: row.name,
+				label: `${flt(row.invoice_portion, 2)} %`,
+			}));
+
+			const dialog_fields = [
+				{
+					fieldname: "create_partial",
+					fieldtype: "Check",
+					label: __("Create Down Payment Invoice"),
+					default: 1,
+				},
+				{
+					fieldname: "has_payment_schedule",
+					fieldtype: "Int",
+					hidden: 1,
+					default: has_ps ? 1 : 0,
+				},
+			];
+
+			if (has_ps) {
+				dialog_fields.push({
+					fieldname: "set_share_manually",
+					fieldtype: "Check",
+					label: __("Set Share Manually"),
+					default: 0,
+					depends_on: "eval: doc.create_partial",
+				});
+				dialog_fields.push({
+					fieldname: "payment_schedule_row",
+					fieldtype: "Select",
+					label: __("Invoice portion (%)"),
+					options: ps_select_options,
+					default: valid_ps_rows[0].name,
+					depends_on: "eval: doc.create_partial && !doc.set_share_manually",
+					mandatory_depends_on: "eval: doc.create_partial && !doc.set_share_manually",
+				});
+			}
+
+			dialog_fields.push(
+				{
+					fieldname: "share_percent",
+					fieldtype: "Float",
+					label: __("Bill This Share of Total Order (%)"),
+					precision: 2,
+					depends_on:
+						"eval: doc.create_partial && (doc.has_payment_schedule == 0 || doc.set_share_manually)",
+					mandatory_depends_on:
+						"eval: doc.create_partial && (doc.has_payment_schedule == 0 || doc.set_share_manually)",
+				},
+				{
+					fieldname: "dp_info",
+					fieldtype: "HTML",
+					options: dp_info_html,
+				},
+				{
+					fieldname: "currency",
+					fieldtype: "Data",
+					hidden: 1,
+					default: frm.doc.currency,
+				},
+				{
+					fieldname: "advance_paid_display",
+					fieldtype: "Currency",
+					label: __("Advance Paid"),
+					read_only: 1,
+					default: flt(frm.doc.advance_paid),
+					options: "currency",
+				}
+			);
 
 			const dialog = new frappe.ui.Dialog({
 				title: __("Create Sales Invoice"),
-				fields: [
-					{
-						fieldname: "create_partial",
-						fieldtype: "Check",
-						label: __("Create Down Payment Invoice"),
-						default: 1,
-					},
-					{
-						fieldname: "share_percent",
-						fieldtype: "Float",
-						label: __("Bill This Share of Total Order (%)"),
-						precision: 2,
-						depends_on: "eval: doc.create_partial",
-						mandatory_depends_on: "eval: doc.create_partial",
-					},
-					{
-						fieldname: "dp_info",
-						fieldtype: "HTML",
-						options: dp_info_html,
-					},
-					{
-						fieldname: "currency",
-						fieldtype: "Data",
-						hidden: 1,
-						default: frm.doc.currency,
-					},
-					{
-						fieldname: "advance_paid_display",
-						fieldtype: "Currency",
-						label: __("Advance Paid"),
-						read_only: 1,
-						default: flt(frm.doc.advance_paid),
-						options: "currency",
-					},
-				],
+				fields: dialog_fields,
 				primary_action_label: __("Create"),
 				primary_action(values) {
 					const create_partial = values.create_partial ? 1 : 0;
 					const share_percent = flt(values.share_percent);
+					const set_share_manually = values.has_payment_schedule
+						? values.set_share_manually
+							? 1
+							: 0
+						: 1;
+					const payment_schedule_row = values.payment_schedule_row || null;
 
 					if (create_partial) {
-						if (share_percent <= 0 || share_percent >= 100) {
-							frappe.throw(
-								__("Bill share (%) must be greater than 0 and less than 100.")
-							);
+						if (set_share_manually) {
+							if (share_percent <= 0 || share_percent >= 100) {
+								frappe.throw(
+									__("Bill share (%) must be greater than 0 and less than 100.")
+								);
+							}
+						} else if (!payment_schedule_row) {
+							frappe.throw(__("Select a payment plan row (invoice portion)."));
 						}
 					}
 
@@ -92,7 +146,9 @@ function show_down_payment_sales_invoice_dialog(frm) {
 						frm: frm,
 						args: {
 							create_partial,
+							set_share_manually,
 							share_percent,
+							payment_schedule_row,
 						},
 						freeze: true,
 						freeze_message: create_partial

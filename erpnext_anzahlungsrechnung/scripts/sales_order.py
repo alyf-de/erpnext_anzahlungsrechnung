@@ -73,7 +73,8 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
 	args = frappe.flags.args or frappe._dict()
 	create_partial = cint(args.get("create_partial", 1))
-	share = flt(args.get("share_percent", 100))
+	set_share_manually = cint(args.get("set_share_manually", 1))
+	payment_schedule_row = args.get("payment_schedule_row")
 
 	so = frappe.get_doc("Sales Order", source_name)
 	if so.docstatus != 1:
@@ -88,8 +89,23 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 		return doc
 
 	frappe.has_permission("Down Payment Invoice", "create", throw=True)
-	if not (0 < share < 100):
-		frappe.throw(_("Bill share (%) must be greater than 0 and less than 100."))
+
+	if set_share_manually:
+		share = flt(args.get("share_percent", 0))
+		if not (0 < share < 100):
+			frappe.throw(_("Bill share (%) must be greater than 0 and less than 100."))
+	else:
+		if not payment_schedule_row:
+			frappe.throw(_("Select a payment plan row (invoice portion)."))
+		ps_row = next(
+			(r for r in (so.get("payment_schedule") or []) if r.name == payment_schedule_row),
+			None,
+		)
+		if not ps_row:
+			frappe.throw(_("The payment plan row does not belong to this Sales Order."))
+		share = flt(ps_row.invoice_portion)
+		if not (0 < share < 100):
+			frappe.throw(_("Invoice portion from the payment plan must be greater than 0 and less than 100."))
 
 	dpi = frappe.new_doc("Down Payment Invoice")
 	dpi.sales_order = source_name
