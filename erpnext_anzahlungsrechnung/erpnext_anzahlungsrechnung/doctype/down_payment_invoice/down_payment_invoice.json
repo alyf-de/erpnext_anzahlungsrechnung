@@ -132,7 +132,8 @@
   {
    "fieldname": "due_date",
    "fieldtype": "Date",
-   "label": "Due Date"
+   "label": "Due Date",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_acc2",
@@ -205,7 +206,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-30 13:00:40.254557",
+ "modified": "2026-05-08 12:01:10.917080",
  "modified_by": "Administrator",
  "module": "ERPNext Anzahlungsrechnung",
  "name": "Down Payment Invoice",

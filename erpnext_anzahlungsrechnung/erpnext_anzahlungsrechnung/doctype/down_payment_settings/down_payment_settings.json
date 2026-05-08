@@ -7,7 +7,9 @@
  "field_order": [
   "default_position_settings_section",
   "default_position_name",
-  "default_position_description"
+  "default_position_description",
+  "further_defaults_section",
+  "credit_days"
  ],
  "fields": [
   {
@@ -33,13 +35,25 @@
    "in_list_view": 1,
    "label": "Default Position Description",
    "reqd": 1
+  },
+  {
+   "fieldname": "further_defaults_section",
+   "fieldtype": "Section Break",
+   "label": "Further Defaults"
+  },
+  {
+   "default": "8",
+   "fieldname": "credit_days",
+   "fieldtype": "Int",
+   "label": "Credit Days",
+   "reqd": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-04-30 10:18:25.110898",
+ "modified": "2026-05-08 12:03:57.952049",
  "modified_by": "Administrator",
  "module": "ERPNext Anzahlungsrechnung",
  "name": "Down Payment Settings",

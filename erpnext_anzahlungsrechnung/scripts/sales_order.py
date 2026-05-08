@@ -105,17 +105,19 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | Non
 	if not dpi.letter_head:
 		frappe.throw(_("Set Default Letter Head on Company {0}.").format(so.company))
 
-	_apply_default_position_from_settings(dpi)
+	settings = frappe.get_cached_doc("Down Payment Settings")
+	_apply_default_position_from_settings(dpi, settings)
+	dpi.due_date = frappe.utils.add_to_date(frappe.utils.getdate(), days=settings.credit_days)
 
 	return dpi
 
 
-def _apply_default_position_from_settings(dpi):
+def _apply_default_position_from_settings(dpi, settings):
 	"""Fill *Position Name* / *Position Description* from **Down Payment Settings** (Jinja, `doc` = draft DPI)."""
-	settings = frappe.get_cached_doc("Down Payment Settings")
 	ctx = {"doc": dpi}
 	name_tpl = (settings.default_position_name or "").strip()
 	desc_tpl = (settings.default_position_description or "").strip()
+
 	if name_tpl:
 		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
 		dpi.position_name = frappe.render_template(name_tpl, ctx)
