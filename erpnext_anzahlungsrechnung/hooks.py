@@ -191,6 +191,10 @@ doc_events = {
 # 	"Task": "erpnext_anzahlungsrechnung.custom.task.CustomTaskMixin"
 # }
 
+override_doctype_class = {
+	"Payment Terms Template": "erpnext_anzahlungsrechnung.overrides.payment_terms_template.PaymentTermsTemplate",
+}
+
 # Overriding Methods
 # ------------------------------
 #
