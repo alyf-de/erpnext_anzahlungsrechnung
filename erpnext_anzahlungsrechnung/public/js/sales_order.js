@@ -37,7 +37,7 @@ function show_down_payment_sales_invoice_dialog(frm) {
 				sales_order: frm.doc.name,
 				docstatus: ["!=", 2],
 			},
-			fields: ["name", "posting_date", "down_payment_percentage"],
+			fields: ["name", "posting_date", "down_payment_percentage", "status"],
 			order_by: "posting_date asc, creation asc",
 		})
 		.then((dpi_rows) => {
@@ -171,7 +171,8 @@ function show_down_payment_sales_invoice_dialog(frm) {
 }
 
 function format_down_payment_invoice_dialog_html(rows) {
-	const title = `<br><p class="small"><strong>${__(
+	const divider = `<hr class="my-2">`;
+	const title = `${divider}<p class="small mb-1"><strong>${__(
 		"For Information Purposes Only"
 	)}</strong></p>`;
 
@@ -183,7 +184,7 @@ function format_down_payment_invoice_dialog_html(rows) {
 
 	const head = `<tr><th>${__("Down Payment Invoice")}</th><th>${__("Date")}</th><th>${__(
 		"Percentage"
-	)}</th></tr>`;
+	)}</th><th>${__("Status")}</th></tr>`;
 	const body = rows
 		.map((row) => {
 			const date_str = row.posting_date
@@ -191,9 +192,14 @@ function format_down_payment_invoice_dialog_html(rows) {
 				: "";
 			const pct = flt(row.down_payment_percentage, 2);
 			const link = frappe.utils.get_form_link("Down Payment Invoice", row.name, true);
+			const status_html = row.status
+				? frappe.utils.escape_html(__(row.status, null, "Down Payment Invoice"))
+				: "—";
 			return `<tr><td>${link}</td><td>${frappe.utils.escape_html(
 				date_str
-			)}</td><td>${frappe.utils.escape_html(String(pct))}&nbsp;%</td></tr>`;
+			)}</td><td>${frappe.utils.escape_html(
+				String(pct)
+			)}&nbsp;%</td><td>${status_html}</td></tr>`;
 		})
 		.join("");
 
