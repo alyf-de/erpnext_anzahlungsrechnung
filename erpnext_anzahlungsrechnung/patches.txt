@@ -10,3 +10,4 @@ erpnext_anzahlungsrechnung.patches.general_settings # 2026-04-30
 erpnext_anzahlungsrechnung.patches.create_sales_invoice_print_format # 2026-05-06 #4
 erpnext_anzahlungsrechnung.patches.remove_custom_fields # 2026-04-30
 execute:frappe.db.set_single_value("Down Payment Settings", "credit_days", 8)
+erpnext_anzahlungsrechnung.patches.remove_sales_order_down_payment_invoice_doctype_links # 2026-05-12
