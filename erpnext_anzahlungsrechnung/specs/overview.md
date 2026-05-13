@@ -1,4 +1,5 @@
 # IMPORTANT NOTE
+
 THIS DESCRIBES OUTDATED REQUIREMENTS AND SOLUTIONS.
 THE FILE IS ONLY KEPT FOR COMPARISON AND DOCUMENTATION PURPOSES AND WILL BE DELETED SOON.
 
@@ -32,7 +33,7 @@ Details:
 
 - Invoice: Nothing special
 - Down Payment Invoice: handled via the separate **Down Payment Invoice** DocType (print / tax allocation); no longer a **Sales Invoice** type.
-- Final Invoice: Here we replace the items of the object doc with the **Sales Order Items**. Furthermore, we show the Down Payment Invoices against the **Sales Order**.
+- Final Invoice: We show the **Down Payment Invoices** against the **Sales Order**.
 
 ## Accounting
 
