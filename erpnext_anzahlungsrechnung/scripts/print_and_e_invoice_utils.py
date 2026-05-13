@@ -8,10 +8,8 @@ def before_print(doc, method, print_settings):
 
 
 def prepare_invoice_data_according_to_invoice_type(doc):
-	if doc.custom_invoice_type == "Invoice":
-		_add_tax_rates_to_items(doc)
+	_add_tax_rates_to_items(doc)
 	if doc.custom_invoice_type == "Final Invoice":
-		_add_tax_rates_to_items(doc)
 		if doc.get("custom_down_payments"):
 			doc.prior_down_payment_print_rows = build_prior_down_payment_print_rows(doc)
 		else:
