@@ -36,17 +36,23 @@ def _prepare_final_invoice_data(doc):
 def _add_tax_rates_to_items(doc):
 	by_item = {}
 	for row in doc.get("item_wise_tax_details") or []:
-		if flt(row.amount) == 0 or flt(row.taxable_amount) == 0:
+		if flt(_row_value(row, "taxable_amount")) == 0:
 			continue
-		by_item.setdefault(row.item_row, []).append(flt(row.rate))
+		by_item.setdefault(_row_value(row, "item_row"), []).append(flt(_row_value(row, "rate")))
 
 	for key in by_item:
-		by_item[key] = sorted(set(by_item[key]))
+		rates = sorted(set(by_item[key]))
+		non_zero_rates = [rate for rate in rates if abs(rate) > 1e-9]
+		by_item[key] = non_zero_rates or rates
+
+	document_has_effective_tax = _document_has_effective_tax(doc)
 
 	for item in doc.items:
 		rates = list(by_item.get(item.name) or [])
-		if not rates:
+		if not rates and document_has_effective_tax:
 			rates = _tax_rates_from_item_tax_rate(getattr(item, "item_tax_rate", None))
+		if not rates and not document_has_effective_tax:
+			rates = [0.0]
 		item.tax_rate = rates if rates else None
 
 
@@ -56,7 +62,29 @@ def _tax_rates_from_item_tax_rate(item_tax_rate):
 	data = frappe.parse_json(item_tax_rate) if isinstance(item_tax_rate, str) else item_tax_rate
 	if not data:
 		return []
-	return sorted({flt(v) for v in data.values()})
+	rates = sorted({flt(v) for v in data.values()})
+	non_zero_rates = [rate for rate in rates if abs(rate) > 1e-9]
+	return non_zero_rates or rates
+
+
+def _document_has_effective_tax(doc):
+	for row in doc.get("item_wise_tax_details") or []:
+		if abs(flt(_row_value(row, "amount"))) > 1e-9:
+			return True
+
+	for row in doc.get("taxes") or []:
+		if abs(flt(_row_value(row, "tax_amount"))) > 1e-9:
+			return True
+		if abs(flt(_row_value(row, "base_tax_amount"))) > 1e-9:
+			return True
+
+	return False
+
+
+def _row_value(row, key):
+	if isinstance(row, dict):
+		return row.get(key)
+	return getattr(row, key, None)
 
 
 def build_prior_down_payment_print_rows(doc):
