@@ -31,17 +31,8 @@ def _add_tax_rates_to_items(doc):
 	for item in doc.items:
 		rates = list(by_item.get(item.name) or [])
 		if not rates:
-			rates = _tax_rates_from_item_tax_rate(getattr(item, "item_tax_rate", None))
-		item.tax_rate = rates if rates else None
-
-
-def _tax_rates_from_item_tax_rate(item_tax_rate):
-	if not item_tax_rate:
-		return []
-	data = frappe.parse_json(item_tax_rate) if isinstance(item_tax_rate, str) else item_tax_rate
-	if not data:
-		return []
-	return sorted({flt(v) for v in data.values()})
+			rates = [0.0]
+		item.tax_rate = rates
 
 
 def build_prior_down_payment_print_rows(doc):
