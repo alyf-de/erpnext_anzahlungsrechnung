@@ -171,22 +171,28 @@ def _validate_consistent_currency(doc):
 
 def validate_sales_order_consistency(doc):
 	"""Orchestrate which validations run based on the invoice type and return against."""
-	if not doc.return_against:
-		_avoid_invoice_type_inconsistencies(doc.custom_invoice_type, doc.items)
+	# Run for all invoice types
+	_avoid_invoice_type_inconsistencies(doc.custom_invoice_type, doc.items)
 
-	if doc.return_against:
+	if doc.is_return and doc.return_against:
+		# Run for all returns
 		_ensure_invoice_type_consistency_for_returns(doc.return_against, doc.custom_invoice_type)
-		_validate_update_of_sales_order_billed_amount(
-			doc.custom_invoice_type, doc.update_billed_amount_in_sales_order
-		)
 
-	if doc.custom_invoice_type == "Final Invoice":
+	if doc.custom_invoice_type == "Invoice":
+		return
+	elif doc.custom_invoice_type == "Final Invoice":
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_validate_consistent_currency(doc)
-		_ensure_final_invoice_completes_sales_order_positions(doc)
 		_validate_final_invoice_income_accounts_match_sales_order(doc)
 		has_additional_discount_on_grand_total(doc)
+		if doc.is_return and doc.return_against:
+			_inform_about_update_of_sales_order_billed_amount(doc.update_billed_amount_in_sales_order)
+			# Actually we want that no extra positions are added. But this is already avoided by the _ensure_sales_order_is_linked validation.
+		else:
+			_ensure_final_invoice_completes_sales_order_positions(doc)
+	else:
+		frappe.throw(_("Invalid invoice type: {0}").format(doc.custom_invoice_type))
 
 
 def _avoid_invoice_type_inconsistencies(invoice_type, items):
@@ -209,12 +215,18 @@ def _ensure_invoice_type_consistency_for_returns(return_against, invoice_type):
 		frappe.throw(_("The Invoice Type of the Return must match the Invoice Type of the original Invoice."))
 
 
-def _validate_update_of_sales_order_billed_amount(invoice_type, update_billed_amount):
+def _inform_about_update_of_sales_order_billed_amount(update_billed_amount):
 	"""Require billed amount updates for final invoice returns."""
-	if invoice_type == "Final Invoice" and not update_billed_amount:
-		frappe.throw(
+	if not update_billed_amount:
+		frappe.msgprint(
 			_(
-				"The Sales Order Billed Amount must be updated if it's a Final Invoice return. Please activate the checkbox."
+				"Note: The Sales Order Billed Amount will not be updated for this return invoice, because the checkbox is not activated."
+			)
+		)
+	else:
+		frappe.msgprint(
+			_(
+				"Note: The Sales Order Billed Amount will be updated for this return invoice, because the checkbox is activated."
 			)
 		)
 
