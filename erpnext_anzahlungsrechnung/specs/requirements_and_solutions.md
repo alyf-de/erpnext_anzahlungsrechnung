@@ -28,13 +28,13 @@ This involves:
 - A partial payment on the **Down Payment Invoice** (only half of the half of the **Sales Order** was paid)
 - A Final **Sales Invoice**
 
-
 |                                                   | Forderungen (S) | Bank (S) | Ertrag 19% (H) | Ertrag 7% (H) | Steuer 19% (H) | Steuer 7% (H) | Erhaltene Anzahlungen 19% (H) | Erhaltene Anzahlungen 7% (H) | Anzahlungsanforderungen (H) |
 | ------------------------------------------------- | --------------- | -------- | -------------- | ------------- | -------------- | ------------- | ----------------------------- | ---------------------------- | --------------------------- |
 | Step 1: **Down Payment Invoice** is submitted     |                 |          |                |               |                |               |                               |                              |                             |
 | Step 2: **Payment Entry** against **Sales Order** | -565            | 565      |                |               |                |               |                               |                              |                             |
-| -> Automation for Step 2                          |                 |          |                |               | 17.5           | 47.5          | 250                           | 250                          | -565                        |
+| -> Automation for Step 2                          |                 |          |                |               | 47.5           | 17.5          | 250                           | 250                          | -565                        |
 | Step 3: Final Invoice                             | 2260            |          | 1000           | 1000          | 190            | 70            |                               |                              |                             |
+| -> Automation for Step 3                             |            |          |           |          |-47.5            |-17.5           |-250                               |-250                              |565                             |
 
 
 ### Automations
