@@ -70,7 +70,7 @@ def _require_income_account_for_down_payment_sales_order(doc):
 
 
 @frappe.whitelist()
-def make_sales_invoice_from_sales_order(source_name: str, target_doc: dict | None = None):
+def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
 	args = frappe.flags.args or frappe._dict()
 	create_partial = cint(args.get("create_partial", 1))
