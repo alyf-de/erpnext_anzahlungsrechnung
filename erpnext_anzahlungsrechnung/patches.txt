@@ -4,7 +4,7 @@
 
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
-execute:from erpnext_anzahlungsrechnung.install import make_custom_fields; make_custom_fields() # 2026-04-29 #15
+execute:from erpnext_anzahlungsrechnung.install import make_custom_fields; make_custom_fields() # 2026-06-05 #2
 execute:from erpnext_anzahlungsrechnung.install import make_property_setters; make_property_setters() # 2026-05-08 #1
 erpnext_anzahlungsrechnung.patches.general_settings # 2026-04-30
 erpnext_anzahlungsrechnung.patches.create_sales_invoice_print_format # 2026-05-06 #4
