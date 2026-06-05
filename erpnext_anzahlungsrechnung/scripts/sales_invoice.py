@@ -32,7 +32,10 @@ def validate(doc, event):
 		return
 	if doc.custom_invoice_type != "Final Invoice":
 		return
-	_validate_company_down_payment_accounts(doc)
+	if not doc.is_return:
+		# No need to validate company's down payment accounts for returns, since it does not affect any custom accounting.
+		# Also some companies might differ between income and discount accounts.
+		_validate_company_down_payment_accounts(doc)
 
 
 def on_submit(doc, event):
@@ -192,13 +195,13 @@ def validate_sales_order_consistency(doc):
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_validate_consistent_currency(doc)
-		_validate_final_invoice_income_accounts_match_sales_order(doc)
 		has_additional_discount_on_grand_total(doc)
 		if doc.is_return and doc.return_against:
 			_validate_final_invoice_return_workflow(doc)
 			# Actually we want that no extra positions are added. But this is already avoided by the _ensure_sales_order_is_linked validation.
 		else:
 			_ensure_final_invoice_completes_sales_order_positions(doc)
+			_validate_final_invoice_income_accounts_match_sales_order(doc)
 	else:
 		frappe.throw(_("Invalid invoice type: {0}").format(doc.custom_invoice_type))
 
