@@ -36,6 +36,23 @@ def validate(doc, event):
 	_validate_company_down_payment_accounts(doc)
 
 
+def on_submit(doc, event):
+	"""Post journal entries for final invoice flows (down payment neutralization, return reversals)."""
+	if doc.is_consolidated or doc.is_internal_transfer():
+		return
+	if cint(doc.get("is_pos")):
+		return
+
+	if doc.is_return and doc.return_against:
+		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
+		if orig_type == "Final Invoice":
+			post_final_invoice_down_payment_neutralization_reversal_for_credit_note(doc)
+		return
+
+	if doc.custom_invoice_type == "Final Invoice":
+		post_final_invoice_down_payment_neutralization_journals(doc)
+
+
 def _validate_company_down_payment_accounts(doc):
 	from erpnext.controllers.taxes_and_totals import ignore_item_wise_tax_details
 
@@ -99,23 +116,6 @@ def _validate_company_down_payment_accounts(doc):
 						frappe.bold(tax_acc),
 					)
 				)
-
-
-def on_submit(doc, event):
-	"""Post journal entries for final invoice flows (down payment neutralization, return reversals)."""
-	if doc.is_consolidated or doc.is_internal_transfer():
-		return
-	if cint(doc.get("is_pos")):
-		return
-
-	if doc.is_return and doc.return_against:
-		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
-		if orig_type == "Final Invoice":
-			post_final_invoice_down_payment_neutralization_reversal_for_credit_note(doc)
-		return
-
-	if doc.custom_invoice_type == "Final Invoice":
-		post_final_invoice_down_payment_neutralization_journals(doc)
 
 
 def _validate_consistent_currency(doc):
