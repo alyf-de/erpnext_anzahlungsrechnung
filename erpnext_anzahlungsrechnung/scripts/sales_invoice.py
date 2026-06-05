@@ -53,6 +53,14 @@ def on_submit(doc, event):
 		post_final_invoice_down_payment_neutralization_journals(doc)
 
 
+def before_cancel(doc, event):
+	frappe.throw(
+		_(
+			"Due to regulatory requirements, you cannot cancel an invoice. Alternatively you can create a return invoice."
+		)
+	)
+
+
 def _validate_company_down_payment_accounts(doc):
 	from erpnext.controllers.taxes_and_totals import ignore_item_wise_tax_details
 
