@@ -16,6 +16,7 @@ def before_validate(doc, event):
 def before_update_after_submit(doc, event):
 	if doc.has_value_changed("custom_invoice_type"):
 		has_additional_discount_on_grand_total(doc)
+		validate_income_account_for_down_payment_sales_order(doc)
 
 
 def validate_income_account_for_down_payment_sales_order(doc):
