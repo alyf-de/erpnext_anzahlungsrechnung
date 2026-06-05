@@ -17,4 +17,11 @@ def get_property_setters():
 		"Sales Order": [
 			("payment_schedule", "description", _PAYMENT_SCHEDULE_FIELD_DESCRIPTION),
 		],
+		"Sales Invoice": [
+			(
+				"update_billed_amount_in_sales_order",
+				"description",
+				"Activate to reduce the billed amount in the Sales Order. Important for creating further invoices.",
+			),
+		],
 	}
