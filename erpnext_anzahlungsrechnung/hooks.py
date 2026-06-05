@@ -150,6 +150,7 @@ doc_events = {
 		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_validate",
 		"validate": "erpnext_anzahlungsrechnung.scripts.sales_invoice.validate",
 		"on_submit": "erpnext_anzahlungsrechnung.scripts.sales_invoice.on_submit",
+		"before_cancel": "erpnext_anzahlungsrechnung.scripts.sales_invoice.before_cancel",
 	},
 	"Sales Order": {
 		"before_validate": "erpnext_anzahlungsrechnung.scripts.sales_order.before_validate",
