@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import flt, getdate
 
 
 def before_print(doc, method, print_settings):
@@ -34,14 +34,12 @@ def _add_tax_rates_to_items(doc):
 
 
 def build_prior_down_payment_print_rows(doc):
-	"""FIFO-allocate Payment Entry advances (by posting date) to down payment rows for print."""
+	"""Allocate Payment Entry advances to down payment rows for print."""
 	dp_rows = doc.get("custom_down_payments") or []
 	if not dp_rows:
 		return []
 
 	precision = doc.precision("grand_total")
-	tol = 10 ** (-precision) if precision else 0.01
-
 	totals = [
 		{
 			"invoice_no": d.invoice_no,
@@ -51,11 +49,19 @@ def build_prior_down_payment_print_rows(doc):
 		}
 		for d in dp_rows
 	]
-	n = len(dp_rows)
-	remaining = [flt(t["grand_total"], precision) for t in totals]
-	emitted = [0] * n
-	out = []
+	dpi_dates = [getdate(d.date) for d in dp_rows]
+	payments = _collect_advance_payments(doc, precision)
+	pe_meta = _load_payment_entry_dates([p["pe"] for p in payments])
+	for payment in payments:
+		meta = pe_meta.get(payment["pe"], {})
+		payment["payment_date"] = meta.get("payment_date")
+		payment["posting_date"] = meta.get("posting_date")
 
+	payments.sort(key=lambda p: (p["payment_date"] or "", p["posting_date"] or "", p["pe"]))
+	return _build_allocated_print_rows(totals, dpi_dates, payments, precision)
+
+
+def _collect_advance_payments(doc, precision):
 	payments = []
 	for adv in doc.get("advances") or []:
 		if adv.reference_type != "Payment Entry" or not adv.reference_name:
@@ -64,16 +70,34 @@ def build_prior_down_payment_print_rows(doc):
 		if amt <= 0:
 			continue
 		payments.append({"pe": adv.reference_name, "amount": amt})
+	return payments
 
-	pe_names = list({p["pe"] for p in payments})
-	posting_by_pe = {}
-	if pe_names:
-		for row in frappe.get_all(
-			"Payment Entry", filters={"name": ["in", pe_names]}, fields=["name", "posting_date"]
-		):
-			posting_by_pe[row.name] = row.posting_date
 
-	payments.sort(key=lambda p: (posting_by_pe.get(p["pe"]) or "", p["pe"]))
+def _load_payment_entry_dates(pe_names):
+	pe_names = list({name for name in pe_names if name})
+	meta = {}
+	if not pe_names:
+		return meta
+	for row in frappe.get_all(
+		"Payment Entry",
+		filters={"name": ["in", pe_names]},
+		fields=["name", "reference_date", "posting_date"],
+	):
+		payment_date = getdate(row.reference_date) if row.reference_date else getdate(row.posting_date)
+		meta[row.name] = {
+			"reference_date": getdate(row.reference_date) if row.reference_date else None,
+			"posting_date": getdate(row.posting_date) if row.posting_date else None,
+			"payment_date": payment_date,
+		}
+	return meta
+
+
+def _build_allocated_print_rows(totals, dpi_dates, payments, precision):
+	tol = 10 ** (-precision) if precision else 0.01
+	n = len(totals)
+	remaining = [flt(t["grand_total"], precision) for t in totals]
+	emitted = [0] * n
+	out = []
 
 	def append_payment_row(dpi_idx: int, paid_on, paid_amount: float):
 		first = emitted[dpi_idx] == 0
@@ -93,9 +117,9 @@ def build_prior_down_payment_print_rows(doc):
 
 	for pay in payments:
 		amt_left = pay["amount"]
-		paid_on = posting_by_pe.get(pay["pe"])
-		while amt_left > tol and sum(remaining) > tol:
-			idx = next((i for i in range(n) if remaining[i] > tol), None)
+		paid_on = pay["payment_date"]
+		while amt_left > tol:
+			idx = _target_dpi_index(dpi_dates, paid_on, remaining, tol, n)
 			if idx is None:
 				break
 			chunk = min(amt_left, remaining[idx])
@@ -119,3 +143,16 @@ def build_prior_down_payment_print_rows(doc):
 			)
 
 	return out
+
+
+def _target_dpi_index(dpi_dates, payment_date, remaining, tol, n):
+	"""Latest down payment invoice (by date, then table order) due on or before the payment."""
+	if not payment_date:
+		return None
+	payment_date = getdate(payment_date)
+	eligible = [i for i in range(n) if dpi_dates[i] <= payment_date and remaining[i] > tol]
+	if not eligible:
+		return None
+	max_date = max(dpi_dates[i] for i in eligible)
+	at_max_date = [i for i in eligible if dpi_dates[i] == max_date]
+	return max(at_max_date)
