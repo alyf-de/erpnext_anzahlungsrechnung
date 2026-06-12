@@ -563,3 +563,21 @@ def _get_submitted_final_invoice_dpi_neutralization_jes(final_invoice_name: str)
 		pluck="name",
 		order_by="creation asc",
 	)
+
+
+@frappe.whitelist()
+def make_sales_return(source_name, target_doc=None):
+	from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+		make_sales_return as make_sales_return_erpnext,
+	)
+
+	doc = make_sales_return_erpnext(source_name, target_doc)
+
+	# Overwrite
+	source_doc = frappe.get_doc("Sales Invoice", source_name)
+	doc.allocate_advances_automatically = 0
+	doc.only_include_allocated_payments = 0
+	doc.advances = []
+	doc.from_date = source_doc.from_date
+	doc.to_date = source_doc.to_date
+	return doc

@@ -207,6 +207,7 @@ override_doctype_dashboards = {
 
 override_whitelisted_methods = {
 	"erpnext.selling.doctype.quotation.quotation.make_sales_order": "erpnext_anzahlungsrechnung.scripts.quotation.make_sales_order",
+	"erpnext.accounts.doctype.sales_invoice.sales_invoice.make_sales_return": "erpnext_anzahlungsrechnung.scripts.sales_invoice.make_sales_return",
 }
 
 # exempt linked doctypes from being automatically cancelled
