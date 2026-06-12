@@ -50,18 +50,8 @@ def build_prior_down_payment_print_rows(doc):
 		for d in dp_rows
 	]
 	dpi_dates = [getdate(d.date) for d in dp_rows]
-	payments = _collect_advance_payments(doc, precision)
-	pe_meta = _load_payment_entry_dates([p["pe"] for p in payments])
-	for payment in payments:
-		meta = pe_meta.get(payment["pe"], {})
-		payment["payment_date"] = meta.get("payment_date")
-		payment["posting_date"] = meta.get("posting_date")
 
-	payments.sort(key=lambda p: (p["payment_date"] or "", p["posting_date"] or "", p["pe"]))
-	return _build_allocated_print_rows(totals, dpi_dates, payments, precision)
-
-
-def _collect_advance_payments(doc, precision):
+	# get Payments
 	payments = []
 	for adv in doc.get("advances") or []:
 		if adv.reference_type != "Payment Entry" or not adv.reference_name:
@@ -70,7 +60,15 @@ def _collect_advance_payments(doc, precision):
 		if amt <= 0:
 			continue
 		payments.append({"pe": adv.reference_name, "amount": amt})
-	return payments
+
+	pe_meta = _load_payment_entry_dates([p["pe"] for p in payments])
+	for payment in payments:
+		meta = pe_meta.get(payment["pe"], {})
+		payment["payment_date"] = meta.get("payment_date")
+		payment["posting_date"] = meta.get("posting_date")
+
+	payments.sort(key=lambda p: (p["payment_date"] or "", p["posting_date"] or "", p["pe"]))
+	return _build_allocated_print_rows(totals, dpi_dates, payments, precision)
 
 
 def _load_payment_entry_dates(pe_names):
