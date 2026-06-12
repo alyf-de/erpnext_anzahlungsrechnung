@@ -23,5 +23,15 @@ def get_property_setters():
 				"description",
 				"Activate to reduce the billed amount in the Sales Order. Important for creating further invoices.",
 			),
+			(
+				"allocate_advances_automatically",
+				"default",
+				"1",
+			),
+			(
+				"only_include_allocated_payments",
+				"default",
+				"1",
+			),
 		],
 	}
