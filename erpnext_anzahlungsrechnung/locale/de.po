@@ -1,4 +1,4 @@
-# Translations template for ERPNext Anzahlungsrechnung.
+# German translations for ERPNext Anzahlungsrechnung.
 # Copyright (C) 2026 ALYF GmbH
 # This file is distributed under the same license as the ERPNext Anzahlungsrechnung project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
@@ -7,19 +7,24 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ERPNext Anzahlungsrechnung VERSION\n"
 "Report-Msgid-Bugs-To: support@alyf.de\n"
-"POT-Creation-Date: 2026-04-30 09:55+0053\n"
+"POT-Creation-Date: 2026-06-12 10:23+0053\n"
 "PO-Revision-Date: 2026-04-30 08:50+0053\n"
 "Last-Translator: support@alyf.de\n"
+"Language: de\n"
 "Language-Team: support@alyf.de\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: de\n"
 "Generated-By: Babel 2.16.0\n"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:317
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:378
 msgid "- Position {0} ({1}): Remaining amount {2} | This invoice bills {3}"
 msgstr "- Position {0} ({1}): Verbleibender Betrag {2} | Diese Rechnung stellt ab: {3}"
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:234
+msgid "A partial return of a Final Invoice cannot update the Sales Order's billed amount. Either return the full invoice amount or deactivate <i>Update Billed Amount in Sales Order</i>."
+msgstr "Eine Teilkorrektur einer Schlussrechnung kann den abgerechneten Betrag im Auftrag nicht aktualisieren. Korrigieren Sie entweder den vollen Rechnungsbetrag oder deaktivieren Sie <i>Aktualisierung des Rechnungsbetrags im Auftrag</i>."
 
 #. Label of the section_accounting (Section Break) field in DocType 'Down
 #. Payment Invoice'
@@ -31,16 +36,16 @@ msgstr "Buchhaltung & Status"
 msgid "Additional discount on Grand Total is not allowed for {0} with invoice type {1}. Set Apply Additional Discount On to Net Total instead, or remove the discount."
 msgstr "Zusätzlicher Rabatt auf Bruttosumme ist für {0} mit Rechnungstyp {1} nicht zulässig. Setzen Sie „Zusätzlichen Rabatt anwenden auf“ auf Nettosumme oder entfernen Sie den Rabatt."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:225
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:286
 msgid "All positions must be linked to a Sales Order."
 msgstr "Alle Positionen müssen mit einem Auftrag verknüpft sein."
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:52
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:155
 msgid "Bill This Share of Total Order (%)"
 msgstr "Diesen Anteil des Gesamtauftrags in Rechnung stellen (%)"
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:85
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:92
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:201
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:62
 msgid "Bill share (%) must be greater than 0 and less than 100."
 msgstr "Abrechnungsanteil (%) muss größer als 0 und kleiner als 100 sein."
 
@@ -63,27 +68,66 @@ msgstr "Konfigurieren Sie Anzahlungskonten für Firma {0} für folgende Erlösko
 msgid "Connection & Linking"
 msgstr "Verknüpfung & Zuordnung"
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:112
-msgid "Could not load Down Payment Invoices for this Sales Order."
-msgstr "Anzahlungsrechnungen zu diesem Auftrag konnten nicht geladen werden."
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:96
+msgid "Could not load Down Payment Invoices for this Sales Order (network or server error)."
+msgstr "Anzahlungsrechnungen für diesen Auftrag konnten nicht geladen werden (Netzwerk- oder Serverfehler)."
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:46
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:72
+msgid "Could not load linked Down Payment Invoices. You need read permission on DocType Down Payment Invoice (ask an administrator), or the server rejected the request."
+msgstr "Verknüpfte Anzahlungsrechnungen konnten nicht geladen werden. Sie benötigen Leseberechtigung für den DocType Anzahlungsrechnung (fragen Sie einen Administrator) oder der Server hat die Anfrage abgelehnt."
+
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:87
+msgid "Could not open the billing dialog: {0}"
+msgstr "Abrechnungsdialog konnte nicht geöffnet werden: {0}"
+
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:121
 msgid "Create Down Payment Invoice"
 msgstr "Anzahlungsrechnung erstellen"
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:99
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:220
 msgid "Creating Down Payment Invoice ..."
 msgstr "Anzahlungsrechnung wird erstellt …"
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:100
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:221
 msgid "Creating Sales Invoice ..."
 msgstr "Debitorenrechnung wird erstellt …"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:168
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:179
 msgid "Debit To Currency: {0}"
 msgstr "Währung Zahlungskonto: {0}"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:108
+#. Label of the default_position_description (Text Editor) field in DocType
+#. 'Down Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Default Position Description"
+msgstr "Standard-Positionsbeschreibung"
+
+#. Label of the default_position_name (Data) field in DocType 'Down Payment
+#. Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Default Position Name"
+msgstr "Standard-Positionsbezeichnung"
+
+#. Label of the default_position_settings_section (Section Break) field in
+#. DocType 'Down Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Default Position Settings"
+msgstr "Standard-Positionseinstellungen"
+
+#. Description of the 'Default Position Description' (Text Editor) field in
+#. DocType 'Down Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+#, python-format
+msgid "Default for <i>Position Description</i> (print / PDF). Rich text and Jinja allowed; same <code>doc</code> as above. Example: <code>Anzahlung ({{ doc.down_payment_percentage }} % of order {{ doc.sales_order }})</code>."
+msgstr "Vorgabe für <i>Positionsbeschreibung</i> (Druck / PDF). Rich Text und Jinja erlaubt; gleiches <code>doc</code> wie oben. Beispiel: <code>Anzahlung ({{ doc.down_payment_percentage }} % des Auftrags {{ doc.sales_order }})</code>."
+
+#. Description of the 'Default Position Name' (Data) field in DocType 'Down
+#. Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Default for <i>Position Name</i> on the new invoice. Plain text or Jinja (context: <code>doc</code> = draft <b>Down Payment Invoice</b>). Example: <code>Anzahlungsrechnung</code> or <code>{{ doc.sales_order }}</code>."
+msgstr "Vorgabe für <i>Positionsbezeichnung</i> auf der neuen Rechnung. Klartext oder Jinja (Kontext: <code>doc</code> = Entwurf <b>Anzahlungsrechnung</b>). Beispiel: <code>Anzahlungsrechnung</code> oder <code>{{ doc.sales_order }}</code>."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:196
 msgid "Down Payment"
 msgstr "Anzahlung"
 
@@ -103,7 +147,7 @@ msgstr "Anzahlungsbetrag muss größer als null sein."
 
 #. Name of a DocType
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.json
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:128
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:242
 msgid "Down Payment Invoice"
 msgstr "Anzahlungsrechnung"
 
@@ -117,6 +161,11 @@ msgstr "Anzahlungsprozentsatz"
 msgid "Down Payment Percentage must be less than 100."
 msgstr "Anzahlungsprozentsatz muss kleiner als 100 sein."
 
+#. Name of a DocType
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Down Payment Settings"
+msgstr "Anzahlungseinstellungen"
+
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:364
 msgid "Down payment invoice {0} must be submitted."
 msgstr "Anzahlungsrechnung {0} muss gebucht sein."
@@ -129,59 +178,90 @@ msgstr "Ausgleich Anzahlungseingang für {0} ({1})"
 msgid "Down payment receipt clearing journal does not balance (debit {0}, credit {1})."
 msgstr "Journal für Ausgleich Anzahlungseingang ist nicht ausgeglichen (Soll {0}, Haben {1})."
 
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:61
+msgid "Due to regulatory requirements, you cannot cancel an invoice. Alternatively you can create a return invoice."
+msgstr "Aufgrund gesetzlicher Vorgaben können Sie eine Rechnung nicht stornieren. Alternativ können Sie eine Gutschrift erstellen."
+
 #: erpnext_anzahlungsrechnung/scripts/company.py:12
 msgid "Duplicate income account {0} in Down Payment Accounts."
 msgstr "Doppeltes Erlöskonto {0} bei Anzahlungskonten."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:109
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:201
 #, python-format
 msgid "Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt."
 msgstr "Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:458
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:546
 msgid "Final Invoice Down Payment Reversal"
-msgstr "Storno Anzahlung Schlussrechnung"
+msgstr "Korrektur Anzahlung Schlussrechnung"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:231
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:292
 msgid "Final Invoices can only process a single Sales Order."
 msgstr "Schlussrechnungen können nur einen einzelnen Auftrag verarbeiten."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:451
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:539
 msgid "Final invoice down payment credit note journal does not balance."
 msgstr "Journal der Gutschrift Anzahlung Schlussrechnung ist nicht ausgeglichen."
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:429
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:377
 msgid "Final invoice down payment neutralization does not balance for {0}."
 msgstr "Neutralisierung Anzahlung Schlussrechnung für {0} ist nicht ausgeglichen."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:457
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:545
 msgid "Final invoice down payment reversal for {0}"
 msgstr "Storno Anzahlung Schlussrechnung für {0}"
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:436
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:384
 msgid "Final invoice neutralization for down payment {0} ({1})"
 msgstr "Neutralisierung Schlussrechnung für Anzahlung {0} ({1})"
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:118
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:232
 msgid "For Information Purposes Only"
 msgstr "Nur zu Informationszwecken"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:264
+#. Label of the further_defaults_section (Section Break) field in DocType 'Down
+#. Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Further Defaults"
+msgstr "Weitere Vorgaben"
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:325
 msgid "Income account on invoice row {0} ({1}) does not match Sales Order row {2} (expected {3}, got {4})."
 msgstr "Erlöskonto in Rechnungsposition {0} ({1}) stimmt nicht mit Auftragsposition {2} überein (erwartet {3}, erhalten {4})."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:206
+msgid "Invalid invoice type: {0}"
+msgstr "Ungültiger Rechnungstyp: {0}"
+
+#. Label of the invoice_file (Attach) field in DocType 'Down Payment Invoice'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.json
+msgid "Invoice File"
+msgstr "Rechnungsdatei"
 
 #. Label of the invoice_no (Link) field in DocType 'Sales Invoice Down Payment'
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/sales_invoice_down_payment/sales_invoice_down_payment.json
 msgid "Invoice No"
 msgstr "Rechnungs-Nr."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:68
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:143
+msgid "Invoice portion (%)"
+msgstr "Rechnungsanteil (%)"
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:74
+msgid "Invoice portion from the payment plan must be greater than 0 and less than 100."
+msgstr "Rechnungsanteil aus dem Zahlungsplan muss größer als 0 und kleiner als 100 sein."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:96
 msgid "Missing Company Down Payment Account row for income account {0}."
 msgstr "Fehlende Zeile Firmenkonto Anzahlung für Erlöskonto {0}."
 
-#: erpnext_anzahlungsrechnung/public/js/sales_order.js:123
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:237
 msgid "No Down Payment Invoices linked to this Sales Order."
 msgstr "Keine Anzahlungsrechnungen mit diesem Auftrag verknüpft."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:241
+msgid "Note: You need to pay back possible advance payments."
+msgstr "Hinweis: Mögliche Vorauszahlungen müssen zurückgezahlt werden."
 
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.py:45
 msgid "Only draft Down Payment Invoices can be refreshed."
@@ -193,7 +273,7 @@ msgstr "Nur Anzahlungsrechnungen im Entwurf können aktualisiert werden."
 msgid "Only the first payment is considered here (if several payments were received)."
 msgstr "Es wird nur die erste Zahlung berücksichtigt (falls mehrere Zahlungen eingegangen sind)."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:408
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:528
 msgid "Original final invoice {0} has no down payment neutralization journal."
 msgstr "Ursprüngliche Schlussrechnung {0} hat kein Neutralisierungsjournal für die Anzahlung."
 
@@ -209,7 +289,7 @@ msgstr "Zahlungsdatum"
 msgid "Payment Details"
 msgstr "Zahlungsdetails"
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:262
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:213
 msgid "Payment against Sales Order {0} exceeds remaining down payment clearing capacity."
 msgstr "Zahlung auf Auftrag {0} übersteigt die verbleibende Kapazität für Anzahlungsausgleich."
 
@@ -234,15 +314,15 @@ msgstr "Konto erhaltene Anzahlungen"
 msgid "Requested Payments Account"
 msgstr "Konto angeforderte Zahlungen"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:399
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:519
 msgid "Return invoice must reference the original invoice."
 msgstr "Gutschrift muss auf die ursprüngliche Rechnung verweisen."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:64
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:29
 msgid "Row {0}: Income Account could not be resolved for item {1} (company {2}). Check item defaults, item group / brand defaults, or company default income account."
 msgstr "Zeile {0}: Erlöskonto für Artikel {1} (Firma {2}) konnte nicht ermittelt werden. Prüfen Sie Artikelvorgaben, Artikelgruppen-/Markenvorgaben oder das Standard-Erlöskonto der Firma."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:166
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:177
 msgid "Sales Invoice Currency: {0}"
 msgstr "Währung Debitorenrechnung: {0}"
 
@@ -251,31 +331,44 @@ msgstr "Währung Debitorenrechnung: {0}"
 msgid "Sales Invoice Down Payment"
 msgstr "Debitorenrechnung Anzahlung"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:164
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:175
 msgid "Sales Order Currency: {0}"
 msgstr "Währung Auftrag: {0}"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:249
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:310
 msgid "Sales Order Item {0} not found."
 msgstr "Auftragsposition {0} nicht gefunden."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:80
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.py:145
+msgid "Sales Order is required."
+msgstr "Auftrag ist erforderlich."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:46
 msgid "Sales Order must be submitted."
 msgstr "Auftrag muss gebucht sein."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:252
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:313
 msgid "Sales Order row {0} has no Income Account. Save the Sales Order after upgrading the app, or set Item Default for company {1}."
 msgstr "Auftragsposition {0} hat kein Erlöskonto. Speichern Sie den Auftrag nach dem App-Update oder legen Sie eine Artikelvorgabe für Firma {1} fest."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:106
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:205
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:65
+msgid "Select a payment plan row (invoice portion)."
+msgstr "Wählen Sie eine Zahlungsplanzeile (Rechnungsanteil)."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:88
 msgid "Set Default Letter Head on Company {0}."
 msgstr "Legen Sie den Standard-Briefkopf für Firma {0} fest."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:88
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:136
+msgid "Set Share Manually"
+msgstr "Anteil manuell festlegen"
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:116
 msgid "Set Tax Account on Company Down Payment Account for income account {0}."
 msgstr "Legen Sie das Steuerkonto im Firmenkonto Anzahlung für Erlöskonto {0} fest."
 
-#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:85
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice_accounting.py:79
 msgid "Set Tax Account on Company Down Payment Account for tax rate {0}%."
 msgstr "Legen Sie das Steuerkonto im Firmenkonto Anzahlung für Steuersatz {0} % fest."
 
@@ -283,11 +376,15 @@ msgstr "Legen Sie das Steuerkonto im Firmenkonto Anzahlung für Steuersatz {0} %
 msgid "Set {0} on Company {1}."
 msgstr "Legen Sie {0} für Firma {1} fest."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:94
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.py:143
+msgid "Submit the Down Payment Invoice before creating a payment."
+msgstr "Buchen Sie die Anzahlungsrechnung, bevor Sie eine Zahlung erstellen."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:122
 msgid "Tax account {0} does not match Company Down Payment Account mapping for income account {1} (expected {2})."
 msgstr "Steuerkonto {0} stimmt nicht mit der Zuordnung im Firmenkonto Anzahlung für Erlöskonto {1} überein (erwartet {2})."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:200
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:217
 msgid "The Invoice Type ({0}) of the Sales Order {1} does not match the Invoice Type of the Invoice."
 msgstr "Der Rechnungstyp ({0}) des Auftrags {1} stimmt nicht mit dem Rechnungstyp der Rechnung überein."
 
@@ -295,13 +392,9 @@ msgstr "Der Rechnungstyp ({0}) des Auftrags {1} stimmt nicht mit dem Rechnungsty
 msgid "The Invoice Type ({0}) of the Sales Order {1} does not match the down payment flow (expected Down Payment Invoice)."
 msgstr "Der Rechnungstyp ({0}) des Auftrags {1} passt nicht zum Anzahlungsablauf (erwartet: Anzahlungsrechnung)."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:209
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:226
 msgid "The Invoice Type of the Return must match the Invoice Type of the original Invoice."
 msgstr "Der Rechnungstyp der Gutschrift muss mit dem Rechnungstyp der ursprünglichen Rechnung übereinstimmen."
-
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:216
-msgid "The Sales Order Billed Amount must be updated if it's a Final Invoice return. Please activate the checkbox."
-msgstr "Der abgerechnete Betrag des Auftrags muss bei einer Schlussrechnungs-Gutschrift aktualisiert werden. Bitte aktivieren Sie das Kontrollkästchen."
 
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.py:84
 msgid "The Sales Order {0} is billed."
@@ -315,29 +408,37 @@ msgstr "Der Auftrag {0} ist nicht gebucht."
 msgid "The Total Sales Order Amount {0} is outdated. The current Sales Order's total is {1}. Please refresh the down payment invoice with the button on top of the form."
 msgstr "Die Auftragssumme {0} ist veraltet. Die aktuelle Auftragssumme beträgt {1}. Bitte aktualisieren Sie die Anzahlungsrechnung mit der Schaltfläche oben im Formular."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:141
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:152
 msgid "The currency of the Income Account {0} does not match the currency of the Sales Invoice."
 msgstr "Die Währung des Erlöskontos {0} stimmt nicht mit der Währung der Debitorenrechnung überein."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:160
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:171
 msgid "The currency of the Sales Invoice must be the same as the currency of the Sales Order and the Debit To Currency."
 msgstr "Die Währung der Debitorenrechnung muss mit der Währung des Auftrags und der Währung des Zahlungskontos übereinstimmen."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:150
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:161
 msgid "The currency of the Tax Row {0} does not match the currency of the Sales Invoice."
 msgstr "Die Währung der Steuerzeile {0} stimmt nicht mit der Währung der Debitorenrechnung überein."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:312
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:373
 msgid "The following Sales Order positions are not fully billed and must be included in the Final Invoice:"
 msgstr "Die folgenden Auftragspositionen sind nicht vollständig abgerechnet und müssen in der Schlussrechnung enthalten sein:"
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:71
+msgid "The last payment plan row is reserved for the Final Invoice."
+msgstr "Die letzte Zahlungsplanzeile ist für die Schlussrechnung reserviert."
+
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:69
+msgid "The payment plan row does not belong to this Sales Order."
+msgstr "Die Zahlungsplanzeile gehört nicht zu diesem Auftrag."
 
 #: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_invoice/down_payment_invoice.py:89
 msgid "The requested down payment amount ({0}) is greater than the outstanding amount ({1}) of the Sales Order {2}."
 msgstr "Der angeforderte Anzahlungsbetrag ({0}) ist größer als der offene Betrag ({1}) des Auftrags {2}."
 
-#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:403
+#: erpnext_anzahlungsrechnung/scripts/sales_invoice.py:523
 msgid "This reversal only applies when the original invoice is a Final Invoice."
-msgstr "Dieses Storno gilt nur, wenn die ursprüngliche Rechnung eine Schlussrechnung ist."
+msgstr "Dieses Korrektur gilt nur, wenn die ursprüngliche Rechnung eine Schlussrechnung ist."
 
 #. Label of the total_sales_order_amount (Currency) field in DocType 'Down
 #. Payment Invoice'
@@ -349,6 +450,21 @@ msgstr "Gesamtauftragssumme"
 msgid "Updating from Sales Order..."
 msgstr "Wird aus Auftrag aktualisiert …"
 
-#: erpnext_anzahlungsrechnung/scripts/sales_order.py:82
+#: erpnext_anzahlungsrechnung/scripts/sales_order.py:48
 msgid "Use the standard Sales Invoice action for this order."
 msgstr "Verwenden Sie für diesen Auftrag die Standardaktion Debitorenrechnung."
+
+#. Description of the 'Default Position Settings' (Section Break) field in
+#. DocType 'Down Payment Settings'
+#: erpnext_anzahlungsrechnung/erpnext_anzahlungsrechnung/doctype/down_payment_settings/down_payment_settings.json
+msgid "Used when a <b>Down Payment Invoice</b> is created from a <b>Sales Order</b> (partial bill). Fills <i>Position Name</i> and <i>Position Description</i> on the new invoice. Optional Jinja: <code>{{ doc.fieldname }}</code> where <code>doc</code> is the draft <b>Down Payment Invoice</b> (e.g. <code>sales_order</code>, <code>down_payment_percentage</code>, <code>down_payment_amount</code>, <code>customer</code>, <code>company</code>)."
+msgstr "Wird verwendet, wenn eine <b>Anzahlungsrechnung</b> aus einem <b>Auftrag</b> erstellt wird (Teilabrechnung). Füllt <i>Positionsbezeichnung</i> und <i>Positionsbeschreibung</i> auf der neuen Rechnung. Optionales Jinja: <code>{{ doc.fieldname }}</code>, wobei <code>doc</code> die Entwurfs-<b>Anzahlungsrechnung</b> ist (z. B. <code>sales_order</code>, <code>down_payment_percentage</code>, <code>down_payment_amount</code>, <code>customer</code>, <code>company</code>)."
+
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:50
+msgid "{0} days"
+msgstr "{0} Tage"
+
+#: erpnext_anzahlungsrechnung/public/js/sales_order.js:47
+msgid "{0} months"
+msgstr "{0} Monate"
+
