@@ -472,6 +472,7 @@ def restore_final_invoice_payments_to_sales_order(return_si, original_si) -> Non
 	party_account = original_si.debit_to
 	active_dimensions = get_dimensions()[0]
 
+	_outstanding = flt(so.grand_total) - flt(so.advance_paid)
 	for row in pe_allocations:
 		allocated = flt(row.allocated_amount)
 		unlink_ref_doc_from_payment_entries(original_si, payment_name=row.reference_name)
@@ -500,12 +501,13 @@ def restore_final_invoice_payments_to_sales_order(return_si, original_si) -> Non
 					if original_si.party_account_currency == original_si.company_currency
 					else so.grand_total
 				),
-				"outstanding_amount": flt(so.grand_total) - flt(so.advance_paid),
+				"outstanding_amount": _outstanding,
 				"difference_account": frappe.get_cached_value(
 					"Company", original_si.company, "exchange_gain_loss_account"
 				),
 			}
 		)
+		_outstanding = _outstanding - allocated
 		for dim in active_dimensions:
 			if original_si.get(dim.fieldname):
 				args.update({dim.fieldname: original_si.get(dim.fieldname)})
