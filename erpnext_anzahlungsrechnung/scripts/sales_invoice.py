@@ -26,7 +26,7 @@ def before_validate(doc, event):
 
 def validate(doc, event):
 	"""After ERPNext validate (taxes calculated): Company Down Payment Account mapping vs income/tax lines."""
-	if doc.is_consolidated or doc.is_internal_transfer():
+	if doc.is_consolidated:
 		return
 	if cint(doc.get("is_pos")):
 		return
@@ -40,7 +40,7 @@ def validate(doc, event):
 
 def on_submit(doc, event):
 	"""Post journal entries for final invoice flows (down payment neutralization, return reversals)."""
-	if doc.is_consolidated or doc.is_internal_transfer():
+	if doc.is_consolidated:
 		return
 	if cint(doc.get("is_pos")):
 		return
