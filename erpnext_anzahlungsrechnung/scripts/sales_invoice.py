@@ -566,7 +566,7 @@ def _get_submitted_final_invoice_dpi_neutralization_jes(final_invoice_name: str)
 
 
 @frappe.whitelist()
-def make_sales_return(source_name, target_doc=None):
+def make_sales_return(source_name: str, target_doc=None):
 	from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
 		make_sales_return as make_sales_return_erpnext,
 	)
