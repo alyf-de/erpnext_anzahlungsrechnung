@@ -34,123 +34,83 @@ def _add_tax_rates_to_items(doc):
 
 
 def build_prior_down_payment_print_rows(doc):
-	"""Allocate Payment Entry advances to down payment rows for print."""
-	dp_rows = doc.get("custom_down_payments") or []
-	if not dp_rows:
-		return []
-
-	precision = doc.precision("grand_total")
-	totals = [
+	"""
+	Build a dictionary in following format:
+	down_payment_invoices = [
 		{
-			"invoice_no": d.invoice_no,
-			"net_total": flt(d.net_total, precision),
-			"tax_amount": flt(d.tax_amount, precision),
-			"grand_total": flt(d.grand_total, precision),
-		}
-		for d in dp_rows
+			"invoice_no": "",
+			"posting_date": "",
+			"down_payment_amount": "",
+			"payment_entries": [
+				{
+					"amount": "",
+					"taxes": [
+						{
+							"description": "",
+							"amount": "",
+						}
+					]
+				}
+			],
+		},
+		{
+			...
+		},
 	]
-	dpi_dates = [getdate(d.date) for d in dp_rows]
-
-	# get Payments
-	payments = []
-	for adv in doc.get("advances") or []:
-		if adv.reference_type != "Payment Entry" or not adv.reference_name:
-			continue
-		amt = flt(adv.allocated_amount, precision)
-		if amt <= 0:
-			continue
-		payments.append({"pe": adv.reference_name, "amount": amt})
-
-	pe_meta = _load_payment_entry_dates([p["pe"] for p in payments])
-	for payment in payments:
-		meta = pe_meta.get(payment["pe"], {})
-		payment["payment_date"] = meta.get("payment_date")
-		payment["posting_date"] = meta.get("posting_date")
-
-	payments.sort(key=lambda p: (p["payment_date"] or "", p["posting_date"] or "", p["pe"]))
-	return _build_allocated_print_rows(totals, dpi_dates, payments, precision)
-
-
-def _load_payment_entry_dates(pe_names):
-	pe_names = list({name for name in pe_names if name})
-	meta = {}
-	if not pe_names:
-		return meta
-	for row in frappe.get_all(
-		"Payment Entry",
-		filters={"name": ["in", pe_names]},
-		fields=["name", "reference_date", "posting_date"],
-	):
-		payment_date = getdate(row.reference_date) if row.reference_date else getdate(row.posting_date)
-		meta[row.name] = {
-			"reference_date": getdate(row.reference_date) if row.reference_date else None,
-			"posting_date": getdate(row.posting_date) if row.posting_date else None,
-			"payment_date": payment_date,
-		}
-	return meta
-
-
-def _build_allocated_print_rows(totals, dpi_dates, payments, precision):
-	tol = 10 ** (-precision) if precision else 0.01
-	n = len(totals)
-	remaining = [flt(t["grand_total"], precision) for t in totals]
-	emitted = [0] * n
-	out = []
-
-	def append_payment_row(dpi_idx: int, paid_on, paid_amount: float):
-		first = emitted[dpi_idx] == 0
-		t = totals[dpi_idx]
-		out.append(
+	"""
+	down_payment_invoices = []
+	for dpi in doc.custom_down_payments:
+		down_payment_invoices.append(
 			{
-				"invoice_no": t["invoice_no"],
-				"show_invoice_amounts": first,
-				"net_total": t["net_total"] if first else None,
-				"tax_amount": t["tax_amount"] if first else None,
-				"grand_total": t["grand_total"] if first else None,
-				"paid_on": paid_on,
-				"paid_amount": flt(paid_amount, precision),
+				"invoice_no": dpi.invoice_no,
+				"posting_date": dpi.date,
+				"down_payment_amount": dpi.grand_total,
+				"payment_entries": [],
 			}
 		)
-		emitted[dpi_idx] += 1
 
-	for pay in payments:
-		amt_left = pay["amount"]
-		paid_on = pay["payment_date"]
-		while amt_left > tol:
-			idx = _target_dpi_index(dpi_dates, paid_on, remaining, tol, n)
-			if idx is None:
-				break
-			chunk = min(amt_left, remaining[idx])
-			append_payment_row(idx, paid_on, chunk)
-			remaining[idx] = flt(remaining[idx] - chunk, precision)
-			amt_left = flt(amt_left - chunk, precision)
+	down_payment_invoices = add_payment_entries_to_down_payment_invoices(down_payment_invoices, doc)
 
-	for i in range(n):
-		if emitted[i] == 0:
-			t = totals[i]
-			out.append(
-				{
-					"invoice_no": t["invoice_no"],
-					"show_invoice_amounts": True,
-					"net_total": t["net_total"],
-					"tax_amount": t["tax_amount"],
-					"grand_total": t["grand_total"],
-					"paid_on": None,
-					"paid_amount": None,
-				}
+	return down_payment_invoices
+
+
+def add_payment_entries_to_down_payment_invoices(down_payment_invoices, doc):
+	for pe in doc.advances:
+		if pe.reference_type != "Payment Entry" or not pe.reference_name:
+			continue
+
+		pe_doc = frappe.get_doc("Payment Entry", pe.reference_name)
+		reference_date = pe_doc.reference_date or pe_doc.posting_date
+		journal_entry = frappe.db.get_all(
+			"Journal Entry",
+			filters={"custom_dp_payment_entry": pe.reference_name, "docstatus": 1},
+			pluck="name",
+		)
+		if journal_entry:
+			journal_entry_doc = frappe.get_doc("Journal Entry", journal_entry[0])
+			tax_rows = []
+			for je_row in journal_entry_doc.accounts:
+				if je_row.account_type == "Tax":
+					tax_rows.append(
+						{
+							"description": je_row.account,
+							"amount": je_row.debit_in_account_currency or je_row.credit_in_account_currency,
+						}
+					)
+
+			down_payment_invoice = next(
+				(
+					dpi
+					for dpi in down_payment_invoices
+					if dpi["invoice_no"] == journal_entry_doc.custom_dp_down_payment_invoice
+				),
+				None,
 			)
-
-	return out
-
-
-def _target_dpi_index(dpi_dates, payment_date, remaining, tol, n):
-	"""Latest down payment invoice (by date, then table order) due on or before the payment."""
-	if not payment_date:
-		return None
-	payment_date = getdate(payment_date)
-	eligible = [i for i in range(n) if dpi_dates[i] <= payment_date and remaining[i] > tol]
-	if not eligible:
-		return None
-	max_date = max(dpi_dates[i] for i in eligible)
-	at_max_date = [i for i in eligible if dpi_dates[i] == max_date]
-	return max(at_max_date)
+			if down_payment_invoice:
+				down_payment_invoice["payment_entries"].append(
+					{
+						"amount": pe_doc.paid_amount,
+						"paid_on": reference_date,
+						"taxes": tax_rows,
+					}
+				)
