@@ -16,6 +16,18 @@ def prepare_invoice_data_according_to_invoice_type(doc):
 			doc.prior_down_payment_print_rows = []
 
 
+def _tax_rates_from_item_tax_rate(item_tax_rate):
+	"""Fallback tax rates from an item's Item Tax Template (``item_tax_rate`` JSON)
+	when no live ``item_wise_tax_details`` row exists for it -- e.g. invoices with
+	no tax rows. Returns an empty list when the item genuinely has no tax."""
+	if not item_tax_rate:
+		return []
+	data = frappe.parse_json(item_tax_rate) if isinstance(item_tax_rate, str) else item_tax_rate
+	if not data:
+		return []
+	return sorted({flt(v) for v in data.values()})
+
+
 def _add_tax_rates_to_items(doc):
 	by_item = {}
 	for row in doc.get("item_wise_tax_details") or []:
@@ -29,8 +41,8 @@ def _add_tax_rates_to_items(doc):
 	for item in doc.items:
 		rates = list(by_item.get(item.name) or [])
 		if not rates:
-			rates = [0.0]
-		item.tax_rate = rates
+			rates = _tax_rates_from_item_tax_rate(getattr(item, "item_tax_rate", None))
+		item.tax_rate = rates if rates else None
 
 
 def build_prior_down_payment_print_rows(doc):
