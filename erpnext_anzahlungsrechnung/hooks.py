@@ -85,6 +85,7 @@ doctype_js = {"Sales Order": "public/js/sales_order.js"}
 jinja = {
 	"methods": [
 		"erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_tax_allocation",
+		"erpnext_anzahlungsrechnung.scripts.print_and_e_invoice_utils.get_final_invoice_prior_down_payments",
 	],
 }
 
