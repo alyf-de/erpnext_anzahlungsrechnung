@@ -87,30 +87,29 @@ In the section "prior invoices" we need following columns:
 - "Paid On"
 - "Paid Amount"
 
-The main challenge with these columns is to assign **Payment Entries** to **Down Payment Invoices**.
-Here is a solution for that:
+In the section "prior invoices" we need a table with following structure (see example):
 
+|Invoice No|Invoice Date|Grand Total|Payment Date|Taxes|Paid Amount|
+|---|---|---|---|---|---|
+|DPI-123|10.05.2026|2260|12.05.2026|Umsatzsteuer 19%: 95<br>Umsatzsteuer 7%: 35|1130|
+||||14.05.2026|Umsatzsteuer 19%: 95<br>Umsatzsteuer 7%: 35|1130|
+|DPI-127|10.06.2026|2260|15.06.2026|Umsatzsteuer 19%: 190<br>Umsatzsteuer 7%: 70|2260|
+|DPI-138|12.07.2026|2260|-|-|-|
+
+How the table can be read:
+- Down Payment invoice "DPI-123" was paid with with two sub payments.
+- "DPI-127" was fully paid.
+- "DPI-138" wasn't paid at all.
+
+Where the data comes from:
 - Consider each **Payment Entry** from **Sales Invoice**'s child table in `advances`.
-- Assign the **Payment Entries** by date to a **Down Payment Entry**
+- Assign the **Payment Entries** by date to a **Down Payment Invoice** from **Sales Invoice Down Payment**.
+- Get the Taxes from the **Jouarnal Entry** that is linked to the respective **Payment Entry**.
 
-#### Edge Cases
+How we solve it technically:
+- We provide the data as raw as possible by a jira method (that way our sample table from above can be individually adjusted)
+- We provide the example (as above) in our jinja template
 
-NOTE: There can be following three edge cases:
-
-- Paid amount is less than invoiced amount -> No problem!
-- Nothing was paid for a certain Down Payment Invoice -> No problem!
-- There are two payments against one **Down Payment Invoice** -> Show them in two rows.
-- No payment -> Show "-" in "Paid On" and "Paid Amount"
-
-#### Example
-
-- **Down Payment Invoices**
-  1. 1000€ on 01.04.
-  2. 1000€ on 16.04.
-- **Payment Entries**
-  1. **Payment Entry** on 02.04. -> Assigned to first invoice
-  2. **Payment Entry** on 15.04. -> Assigned to first invoice
-  3. **Payment Entry** on 16.04. -> Assigned to second invoice
 
 ## Proportional tax on down payments
 
