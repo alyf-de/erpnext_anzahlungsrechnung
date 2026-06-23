@@ -28,13 +28,18 @@ This involves:
 - A partial payment on the **Down Payment Invoice** (only half of the half of the **Sales Order** was paid)
 - A Final **Sales Invoice**
 
+
 |                                                   | Forderungen (S) | Bank (S) | Ertrag 19% (H) | Ertrag 7% (H) | Steuer 19% (H) | Steuer 7% (H) | Erhaltene Anzahlungen 19% (H) | Erhaltene Anzahlungen 7% (H) | Anzahlungsanforderungen (H) |
 | ------------------------------------------------- | --------------- | -------- | -------------- | ------------- | -------------- | ------------- | ----------------------------- | ---------------------------- | --------------------------- |
 | Step 1: **Down Payment Invoice** is submitted     |                 |          |                |               |                |               |                               |                              |                             |
 | Step 2: **Payment Entry** against **Sales Order** | -565            | 565      |                |               |                |               |                               |                              |                             |
 | -> Automation for Step 2                          |                 |          |                |               | 47.5           | 17.5          | 250                           | 250                          | -565                        |
 | Step 3: Final Invoice                             | 2260            |          | 1000           | 1000          | 190            | 70            |                               |                              |                             |
-| -> Automation for Step 3                             |            |          |           |          |-47.5            |-17.5           |-250                               |-250                              |565                             |
+| -> Automation for Step 3                          |                 |          |                |               | -47.5          | -17.5         | -250                          | -250                         | 565                         |
+| Step 4: Full Return                               | -2260           |          | -1000          | -1000         | -190           | -70           |                               |                              |                             |
+| -> Automation for Step 4                          |                 |          |                |               | 47.5           | 17.5          | 250                           | 250                          | -565                        |
+| Step 5: Final Invoice                             | 2260            |          | 1000           | 1000          | 190            | 70            |                               |                              |                             |
+| -> Automation for Step 5                          |                 |          |                |               | -47.5          | -17.5         | -250                          | -250                         | 565                         |
 
 
 ### Automations
@@ -58,9 +63,29 @@ All need to be undone by neutralizing **Journal Entries**.
 Note: We don't need a validation of matching `debit_to` account between **Sales Order** and **Sales Invoice**,
 because the debit_to accounts of the previous automations will be used anyway – since we just reverse these previous **Journal Entries**.
 
+#### Step 4: Returns
+
+This only counts for full returns agains the Sales Order.
+Here we create a new **Journal Entry** that undos what was done in previous step 3.
+
+We expect another full final invoice in the next step.
+
+#### Step 5
+
+Same as step 3 in this example.
+
 ## Print Formats
 
 ### Sales Invoice (Type: Final Invoice)
+
+In the section "prior invoices" we need following columns:
+
+- "Invoice No"
+- "Net Amount"
+- "Tax Amount"
+- "Grand Total"
+- "Paid On"
+- "Paid Amount"
 
 In the section "prior invoices" we need a table with following structure (see example):
 
@@ -112,13 +137,17 @@ The item table uses *Description*, *Tax Rate*, *Net Amount*, and *Tax* (no seria
 ```
 
 ## Supporting Features
+
 ### Create Payments from Down Payment Invoice
+
 In the form view of **Down Payment Invoice** is a button ("Create" > "Payment") that opens a **Payment Entry**.
 It works as the button in **Sales Order**. Only difference is, that the paid amount equals the **Down Payment Invoice**'s amount.
 
 ## Enforced Limitations on ERPNext
+
 To keep the features of the consistent, we limit some functionalities in ERPNext.
 These are:
+
 - In **Company** `book_advance_payments_in_separate_party_account` is deactivated, because we have a more profound booking of advance payments.
 
 ## Payment schedule and **Payment Terms Template**

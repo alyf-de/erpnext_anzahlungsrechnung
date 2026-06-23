@@ -6,16 +6,15 @@ from frappe.utils import cint, flt
 from frappe.utils.formatters import format_value
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
+	build_reversed_journal_rows_from_entries,
 	get_down_payment_net_total,
 	post_final_invoice_down_payment_neutralization_journals,
 )
 from erpnext_anzahlungsrechnung.scripts.utils import (
 	aggregate_income_by_account,
-	append_je_row,
 	get_company_down_payment_map,
 	has_additional_discount_on_grand_total,
 	insert_and_submit_je,
-	merge_je_account_rows,
 	require_down_payment_accounts_for_income,
 )
 
@@ -27,30 +26,42 @@ def before_validate(doc, event):
 
 def validate(doc, event):
 	"""After ERPNext validate (taxes calculated): Company Down Payment Account mapping vs income/tax lines."""
-	if doc.is_consolidated or doc.is_internal_transfer():
+	if doc.is_consolidated:
 		return
 	if cint(doc.get("is_pos")):
 		return
 	if doc.custom_invoice_type != "Final Invoice":
 		return
-	_validate_company_down_payment_accounts(doc)
+	if not doc.is_return:
+		# No need to validate company's down payment accounts for returns, since it does not affect any custom accounting.
+		# Also some companies might differ between income and discount accounts.
+		_validate_company_down_payment_accounts(doc)
 
 
 def on_submit(doc, event):
 	"""Post journal entries for final invoice flows (down payment neutralization, return reversals)."""
-	if doc.is_consolidated or doc.is_internal_transfer():
+	if doc.is_consolidated:
 		return
 	if cint(doc.get("is_pos")):
 		return
 
 	if doc.is_return and doc.return_against:
-		orig_type = frappe.db.get_value("Sales Invoice", doc.return_against, "custom_invoice_type")
-		if orig_type == "Final Invoice":
+		if _get_final_invoice_return_case(doc) == 2:
+			original = frappe.get_doc("Sales Invoice", doc.return_against)
+			restore_final_invoice_payments_to_sales_order(doc, original)
 			post_final_invoice_down_payment_neutralization_reversal_for_credit_note(doc)
 		return
 
 	if doc.custom_invoice_type == "Final Invoice":
 		post_final_invoice_down_payment_neutralization_journals(doc)
+
+
+def before_cancel(doc, event):
+	frappe.throw(
+		_(
+			"Due to regulatory requirements, you cannot cancel an invoice. Alternatively you can create a return invoice."
+		)
+	)
 
 
 def _validate_company_down_payment_accounts(doc):
@@ -184,13 +195,13 @@ def validate_sales_order_consistency(doc):
 		_ensure_sales_order_is_linked(doc.items)
 		_ensure_only_one_linked_sales_order(doc.items)
 		_validate_consistent_currency(doc)
-		_validate_final_invoice_income_accounts_match_sales_order(doc)
 		has_additional_discount_on_grand_total(doc)
 		if doc.is_return and doc.return_against:
-			_inform_about_update_of_sales_order_billed_amount(doc.update_billed_amount_in_sales_order)
+			_validate_final_invoice_return_workflow(doc)
 			# Actually we want that no extra positions are added. But this is already avoided by the _ensure_sales_order_is_linked validation.
 		else:
 			_ensure_final_invoice_completes_sales_order_positions(doc)
+			_validate_final_invoice_income_accounts_match_sales_order(doc)
 	else:
 		frappe.throw(_("Invalid invoice type: {0}").format(doc.custom_invoice_type))
 
@@ -215,20 +226,58 @@ def _ensure_invoice_type_consistency_for_returns(return_against, invoice_type):
 		frappe.throw(_("The Invoice Type of the Return must match the Invoice Type of the original Invoice."))
 
 
-def _inform_about_update_of_sales_order_billed_amount(update_billed_amount):
-	"""Require billed amount updates for final invoice returns."""
-	if not update_billed_amount:
-		frappe.msgprint(
+def _validate_final_invoice_return_workflow(doc):
+	"""Enforce return_workflow.md cases 1 and 4 for Final Invoice credit notes."""
+	case = _get_final_invoice_return_case(doc)
+	if case == 1:
+		frappe.throw(
 			_(
-				"Note: The Sales Order Billed Amount will not be updated for this return invoice, because the checkbox is not activated."
+				"A partial return of a Final Invoice cannot update the Sales Order's billed amount. "
+				"Either return the full invoice amount or deactivate <i>Update Billed Amount in Sales Order</i>."
 			)
 		)
-	else:
+	if case == 4:
 		frappe.msgprint(
-			_(
-				"Note: The Sales Order Billed Amount will be updated for this return invoice, because the checkbox is activated."
-			)
+			_("Note: You need to pay back possible advance payments."),
+			indicator="orange",
 		)
+
+
+def _get_final_invoice_return_case(return_si) -> int | None:
+	"""Return 1-4 for Final Invoice returns, or None when not applicable."""
+	if not return_si.is_return or not return_si.return_against:
+		return None
+	if return_si.custom_invoice_type != "Final Invoice":
+		return None
+	if (
+		frappe.db.get_value("Sales Invoice", return_si.return_against, "custom_invoice_type")
+		!= "Final Invoice"
+	):
+		return None
+
+	original = frappe.get_doc("Sales Invoice", return_si.return_against)
+	is_full = _is_full_final_invoice_return(return_si, original)
+	if cint(return_si.update_billed_amount_in_sales_order):
+		return 2 if is_full else 1
+	return 4 if is_full else 3
+
+
+def _is_full_final_invoice_return(return_si, original_si) -> bool:
+	"""True when this return (plus prior submitted returns) covers 100% of the original invoice."""
+	cumulative = _get_cumulative_returned_base_grand_total(original_si.name, return_si)
+	orig_total = abs(flt(original_si.base_grand_total))
+	return abs(cumulative - orig_total) <= 0.02
+
+
+def _get_cumulative_returned_base_grand_total(original_name: str, return_si) -> float:
+	"""Sum abs(base_grand_total) of this return and other submitted returns against the original."""
+	total = abs(flt(return_si.base_grand_total))
+	filters = {"return_against": original_name, "docstatus": 1, "is_return": 1}
+	if return_si.name:
+		filters["name"] = ["!=", return_si.name]
+	for base_grand_total in frappe.get_all("Sales Invoice", filters=filters, pluck="base_grand_total"):
+		total += abs(flt(base_grand_total))
+	return total
 
 
 def _ensure_sales_order_is_linked(items):
@@ -336,7 +385,7 @@ def _ensure_final_invoice_completes_sales_order_positions(doc):
 
 
 def append_down_payment_invoice_to_final_invoice(doc):
-	if doc.custom_invoice_type != "Final Invoice":
+	if doc.custom_invoice_type != "Final Invoice" or doc.is_return:
 		return
 
 	dpi = DocType("Down Payment Invoice")
@@ -405,8 +454,69 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		)
 
 
-def post_final_invoice_down_payment_neutralization_reversal_for_credit_note(return_si) -> str:
-	"""Reverse final-invoice down payment neutralization **Journal Entries** in proportion to this credit note."""
+def restore_final_invoice_payments_to_sales_order(return_si, original_si) -> None:
+	"""Unlink **Payment Entries** from the original final invoice and reconcile them back to the **Sales Order**."""
+	from erpnext.accounts.doctype.accounting_dimension.accounting_dimension import get_dimensions
+	from erpnext.accounts.doctype.unreconcile_payment.unreconcile_payment import get_linked_payments_for_doc
+	from erpnext.accounts.utils import reconcile_against_document, unlink_ref_doc_from_payment_entries
+
+	sales_order = return_si.items[0].sales_order
+	linked = get_linked_payments_for_doc(original_si.company, "Sales Invoice", original_si.name)
+	pe_allocations = [
+		row for row in linked if row.reference_doctype == "Payment Entry" and flt(row.allocated_amount) > 0
+	]
+	if not pe_allocations:
+		return
+
+	so = frappe.get_doc("Sales Order", sales_order)
+	party_account = original_si.debit_to
+	active_dimensions = get_dimensions()[0]
+
+	_outstanding = flt(so.grand_total) - flt(so.advance_paid)
+	for row in pe_allocations:
+		allocated = flt(row.allocated_amount)
+		unlink_ref_doc_from_payment_entries(original_si, payment_name=row.reference_name)
+
+		args = frappe._dict(
+			{
+				"voucher_type": "Payment Entry",
+				"voucher_no": row.reference_name,
+				"against_voucher_type": "Sales Order",
+				"against_voucher": sales_order,
+				"account": party_account,
+				"party_type": "Customer",
+				"party": original_si.customer,
+				"is_advance": "Yes",
+				"dr_or_cr": "credit_in_account_currency",
+				"unadjusted_amount": allocated,
+				"allocated_amount": allocated,
+				"precision": frappe.get_precision("Payment Entry", "unallocated_amount"),
+				"exchange_rate": (
+					original_si.conversion_rate
+					if original_si.party_account_currency != original_si.company_currency
+					else 1
+				),
+				"grand_total": (
+					so.base_grand_total
+					if original_si.party_account_currency == original_si.company_currency
+					else so.grand_total
+				),
+				"outstanding_amount": _outstanding,
+				"difference_account": frappe.get_cached_value(
+					"Company", original_si.company, "exchange_gain_loss_account"
+				),
+			}
+		)
+		_outstanding = _outstanding - allocated
+		for dim in active_dimensions:
+			if original_si.get(dim.fieldname):
+				args.update({dim.fieldname: original_si.get(dim.fieldname)})
+
+		reconcile_against_document([args], active_dimensions=active_dimensions)
+
+
+def post_final_invoice_down_payment_neutralization_reversal_for_credit_note(return_si) -> str | None:
+	"""Reverse Step 3 down payment neutralization **Journal Entries** for a full Final Invoice return (Case 2)."""
 	if not return_si.return_against:
 		frappe.throw(_("Return invoice must reference the original invoice."))
 
@@ -420,43 +530,11 @@ def post_final_invoice_down_payment_neutralization_reversal_for_credit_note(retu
 			_("Original final invoice {0} has no down payment neutralization journal.").format(original.name)
 		)
 
-	orig_net = abs(flt(original.base_net_total))
-	ret_net = abs(flt(return_si.base_net_total))
-	ratio = ret_net / orig_net if orig_net else 1.0
-
 	last_je_name = None
 	for je_name in neutralization_je_names:
-		source_je = frappe.get_doc("Journal Entry", je_name)
-		rows = []
-		for line in source_je.accounts:
-			debit = abs(flt(line.debit_in_account_currency)) * ratio
-			credit = abs(flt(line.credit_in_account_currency)) * ratio
-			if not debit and not credit:
-				continue
-			if debit:
-				append_je_row(
-					rows,
-					line.account,
-					0,
-					debit,
-					line.cost_center,
-					line.project,
-					party_type=line.party_type or None,
-					party=line.party or None,
-				)
-			if credit:
-				append_je_row(
-					rows,
-					line.account,
-					credit,
-					0,
-					line.cost_center,
-					line.project,
-					party_type=line.party_type or None,
-					party=line.party or None,
-				)
-
-		rows = merge_je_account_rows(rows)
+		rows = build_reversed_journal_rows_from_entries([je_name])
+		if not rows:
+			continue
 		total_debit = sum(flt(r.get("debit_in_account_currency") or 0) for r in rows)
 		total_credit = sum(flt(r.get("credit_in_account_currency") or 0) for r in rows)
 		if abs(total_debit - total_credit) > 0.02:
@@ -487,3 +565,21 @@ def _get_submitted_final_invoice_dpi_neutralization_jes(final_invoice_name: str)
 		pluck="name",
 		order_by="creation asc",
 	)
+
+
+@frappe.whitelist()
+def make_sales_return(source_name: str, target_doc: str | None = None):
+	from erpnext.accounts.doctype.sales_invoice.sales_invoice import (
+		make_sales_return as make_sales_return_erpnext,
+	)
+
+	doc = make_sales_return_erpnext(source_name, target_doc)
+
+	# Overwrite
+	source_doc = frappe.get_doc("Sales Invoice", source_name)
+	doc.allocate_advances_automatically = 0
+	doc.only_include_allocated_payments = 0
+	doc.advances = []
+	doc.from_date = source_doc.from_date
+	doc.to_date = source_doc.to_date
+	return doc
