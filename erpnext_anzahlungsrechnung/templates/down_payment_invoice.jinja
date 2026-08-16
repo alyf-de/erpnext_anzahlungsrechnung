@@ -4,11 +4,8 @@
 {% set cmp_addr = frappe.get_doc("Address", so.company_address) if so.company_address else None %}
 {% set pay_addr = frappe.get_doc("Address", so.customer_address) if so.customer_address else None %}
 
-{% set tax_rows = get_down_payment_invoice_print_tax_rows(doc.sales_order, doc.down_payment_amount) %}
-{% set dpi_net_total = namespace(v=0) %}
-{% for r in tax_rows %}
-{% set dpi_net_total.v = dpi_net_total.v + frappe.utils.flt(r.net_amount) %}
-{% endfor %}
+{% set tax_rows = get_down_payment_invoice_print_tax_rows(doc) %}
+{% set item_rows = get_down_payment_invoice_item_rows(doc) %}
 
 <!-- HEAD -->
 <div id="header">
@@ -117,33 +114,21 @@
 			</tr>
 		</thead>
 		<tbody>
-			{% if tax_rows %}
+			{% for i in item_rows %}
 			<tr>
-				<td><b>{{ doc.position_name }}</b><br>{{ doc.position_description }}</td>
-				<td>{{ tax_rows[0].rate_label }}</td>
-				<td class="text-right">{{ frappe.utils.fmt_money(tax_rows[0].net_amount, currency=currency) }}</td>
-				<td class="text-right">{{ frappe.utils.fmt_money(tax_rows[0].tax_amount, currency=currency) }}</td>
-			</tr>
-			{% for r in tax_rows[1:] %}
-			<tr>
-				<td></td>
-				<td>{{ r.rate_label }}</td>
-				<td class="text-right">{{ frappe.utils.fmt_money(r.net_amount, currency=currency) }}</td>
-				<td class="text-right">{{ frappe.utils.fmt_money(r.tax_amount, currency=currency) }}</td>
+				<td><b>{{ i.item_name }}</b>{% if i.description %}<br>{{ i.description }}{% endif %}</td>
+				<td>{{ i.rate_label }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(i.net_amount, currency=currency) }}</td>
+				<td class="text-right">{{ frappe.utils.fmt_money(i.tax_amount, currency=currency) }}</td>
 			</tr>
 			{% endfor %}
-			{% else %}
-			<tr>
-				<td colspan="4"><b>{{ doc.position_name }}</b><br>{{ doc.position_description }}</td>
-			</tr>
-			{% endif %}
 		</tbody>
 		<tfoot class="black-border">
 			<tr>
 				<td>{{ _("Net Total") }}</td>
 				<td></td>
 				<td></td>
-				<td class="text-right">{{ frappe.utils.fmt_money(dpi_net_total.v, currency=currency) }}</td>
+				<td class="text-right">{{ doc.get_formatted("net_total") }}</td>
 			</tr>
 			{% for r in tax_rows -%}
 				{% if r.tax_amount or print_settings.print_taxes_with_zero_amount %}
@@ -157,7 +142,7 @@
 			{%- endfor %}
 			<tr>
 				<td colspan="3"><strong>{{ _("Grand Total") }}</strong></td>
-				<td class="text-right"><strong>{{ doc.get_formatted("down_payment_amount") }}</strong></td>
+				<td class="text-right"><strong>{{ doc.get_formatted("grand_total") }}</strong></td>
 			</tr>
 		</tfoot>
 	</table>

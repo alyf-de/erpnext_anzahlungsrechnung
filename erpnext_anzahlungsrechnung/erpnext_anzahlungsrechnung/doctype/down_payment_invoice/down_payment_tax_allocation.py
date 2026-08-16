@@ -16,6 +16,25 @@ def get_down_payment_invoice_print_tax_rows(doc) -> list[dict]:
 	return _rows_from_buckets(_aggregate_item_wise_by_rate(doc))
 
 
+def get_down_payment_invoice_item_rows(doc) -> list[dict]:
+	"""Jinja helper: one row per item, with that item's own rate and tax, for the print body."""
+	rows = []
+	for item in doc.get("items") or []:
+		rate = _rate_from_item_tax_template(item)
+		net = flt(item.net_amount)
+		tax = flt(net * rate / 100) if rate else 0.0
+		rows.append(
+			{
+				"item_name": item.item_name,
+				"description": item.description,
+				"net_amount": net,
+				"rate_label": _format_rate_label(rate),
+				"tax_amount": tax,
+			}
+		)
+	return rows
+
+
 def _aggregate_item_wise_by_rate(doc) -> dict[float, dict]:
 	"""Build VAT buckets without double-counting.
 
