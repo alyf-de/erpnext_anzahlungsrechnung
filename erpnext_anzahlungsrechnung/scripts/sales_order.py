@@ -97,8 +97,7 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 
 	for row in _build_dpi_items_for_percentage(so, share):
 		dpi.append("items", row)
-	for tax in so.taxes:
-		dpi.append("taxes", {f: tax.get(f) for f in TAX_COPY_FIELDS})
+	_copy_so_taxes_to_dpi(dpi, so)
 	dpi.taxes_and_charges = so.taxes_and_charges
 
 	dpi.letter_head = frappe.db.get_value("Company", so.company, "default_letter_head")
@@ -106,9 +105,11 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 		frappe.throw(_("Set Default Letter Head on Company {0}.").format(so.company))
 
 	settings = frappe.get_cached_doc("Down Payment Settings")
+	# Calculate totals before rendering the settings templates -- default_position_description
+	# can reference {{ doc.grand_total }}, which would otherwise still be 0.0 at render time.
+	dpi.run_method("calculate_taxes_and_totals")
 	_apply_default_position_from_settings(dpi, settings)
 	dpi.due_date = frappe.utils.add_to_date(frappe.utils.getdate(), days=settings.credit_days)
-	dpi.run_method("calculate_taxes_and_totals")
 
 	# Set project if custom field exists
 	if frappe.db.exists(
@@ -122,6 +123,39 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	):
 		dpi.custom_project = so.project
 	return dpi
+
+
+def _copy_so_taxes_to_dpi(dpi, so):
+	"""Copy the Sales Order's tax rows onto the DPI, skipping ``charge_type == "Actual"`` rows.
+
+	TAX_COPY_FIELDS deliberately excludes ``tax_amount``/``total``/``base_*`` so ordinary rate-based
+	rows scale themselves down to the DPI's smaller net via ``calculate_taxes_and_totals()``. But for
+	an ``"Actual"`` row ``tax_amount`` *is* the charge (a flat fee, not a rate), and nothing
+	recomputes it -- copying the row without its amount would leave a visible 0,00 charge on the
+	DPI, and a flat SO-wide fee should not be pro-rated into a down payment anyway. Skip it.
+
+	Skipping a row can break the ``row_id`` reference other rows use for "On Previous Row *" charge
+	types (a 1-based index into the same table), so also skip any row chained off a skipped row and
+	renumber the surviving rows' ``row_id`` to match their new position.
+	"""
+	dropped_idx = {t.idx for t in so.taxes if t.charge_type == "Actual"}
+	changed = True
+	while changed:
+		changed = False
+		for t in so.taxes:
+			if t.idx not in dropped_idx and t.row_id and cint(t.row_id) in dropped_idx:
+				dropped_idx.add(t.idx)
+				changed = True
+
+	kept = [t for t in so.taxes if t.idx not in dropped_idx]
+	old_to_new_idx = {t.idx: new_idx for new_idx, t in enumerate(kept, start=1)}
+
+	for tax in kept:
+		row = {f: tax.get(f) for f in TAX_COPY_FIELDS}
+		if row.get("row_id"):
+			new_row_id = old_to_new_idx.get(cint(row["row_id"]))
+			row["row_id"] = str(new_row_id) if new_row_id else None
+		dpi.append("taxes", row)
 
 
 def _build_dpi_items_for_percentage(so, pct):

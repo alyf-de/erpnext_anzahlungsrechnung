@@ -13,7 +13,10 @@ from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_
 	get_submitted_payment_entries_linked_via_clearing_journal,
 	post_down_payment_invoice_submission_journals,
 )
-from erpnext_anzahlungsrechnung.scripts.utils import require_down_payment_accounts_for_income
+from erpnext_anzahlungsrechnung.scripts.utils import (
+	get_company_down_payment_map,
+	require_down_payment_accounts_for_income,
+)
 
 
 class DownPaymentInvoice(AccountsController):
@@ -120,6 +123,48 @@ def _validate_company_down_payment_mapping(doc):
 	income_totals, _, _, _, _ = get_income_tax_totals_for_down_payment_invoice(doc)
 	if income_totals:
 		require_down_payment_accounts_for_income(doc.company, income_totals.keys())
+	_validate_tax_accounts_match_company_mapping(doc, income_totals.keys())
+
+
+def _validate_tax_accounts_match_company_mapping(doc, income_accounts):
+	"""Each ``taxes`` row's ``account_head`` must match the tax account this document's income
+	accounts are mapped to for that row's rate. ``down_payment_invoice_accounting.py`` now reads
+	the tax account straight off ``tax.account_head`` instead of looking it up via
+	``Company Down Payment Account``, so nothing else catches a mis-mapped company here -- and
+	the final invoice's own rule (``scripts/sales_invoice.py::_validate_company_down_payment_accounts``)
+	will later demand the account this validation expects. Mirrors that same rate -> tax_account
+	comparison so both sides agree before the money moves anywhere."""
+	if not income_accounts:
+		return
+	dp_map = get_company_down_payment_map(doc.company)
+	rate_tol = 0.01
+	for tax in doc.get("taxes") or []:
+		if not flt(tax.base_tax_amount_after_discount_amount):
+			continue
+		for income_account in income_accounts:
+			cfg = dp_map.get(income_account)
+			if not cfg:
+				continue
+			expected_rate = flt(cfg.get("tax_rate"))
+			if expected_rate <= 0 or abs(flt(tax.rate) - expected_rate) > rate_tol:
+				continue
+			tax_acc = cfg.get("tax_account")
+			if not tax_acc:
+				frappe.throw(
+					_("Set Tax Account on Company Down Payment Account for income account {0}.").format(
+						frappe.bold(income_account)
+					)
+				)
+			if tax.account_head != tax_acc:
+				frappe.throw(
+					_(
+						"Tax account {0} does not match Company Down Payment Account mapping for income account {1} (expected {2})."
+					).format(
+						frappe.bold(tax.account_head),
+						frappe.bold(income_account),
+						frappe.bold(tax_acc),
+					)
+				)
 
 
 @frappe.whitelist()

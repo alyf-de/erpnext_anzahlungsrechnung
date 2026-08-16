@@ -177,7 +177,7 @@ def build_down_payment_receipt_clearing_journal_accounts(
 	ref_name: str,
 ) -> list[dict]:
 	"""Account rows for one receipt-clearing **Journal Entry** (Step 2) for ``alloc_base`` in company currency."""
-	income_totals, _tax_totals, _icc, _ipr, _tcc = get_income_tax_totals_for_down_payment_invoice(dpi)
+	income_totals, tax_totals, _icc, _ipr, tax_cc = get_income_tax_totals_for_down_payment_invoice(dpi)
 	require_down_payment_accounts_for_income(pe.company, income_totals.keys())
 	dp_map = get_company_down_payment_map(pe.company)
 
@@ -196,7 +196,10 @@ def build_down_payment_receipt_clearing_journal_accounts(
 	net_portion = flt(alloc_base * base_net / base_grand, 2)
 	tax_pool = flt(alloc_base - net_portion, 2)
 
-	tax_amounts = aggregate_tax_amounts_for_down_payment_invoice(dpi)
+	# Reuse tax_totals/tax_cc from the get_income_tax_totals_for_down_payment_invoice() call
+	# above instead of calling aggregate_tax_amounts_for_down_payment_invoice(dpi), which would
+	# just re-derive the same numbers from the same document a second time.
+	tax_amounts = [(acc, flt(base_amt), tax_cc.get(acc)) for acc, base_amt in tax_totals.items() if base_amt]
 	tax_splits = defaultdict(float)
 	total_tax_base = sum(flt(a[1]) for a in tax_amounts)
 	if total_tax_base > 0 and tax_pool:

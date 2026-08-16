@@ -395,12 +395,25 @@ def append_down_payment_invoice_to_final_invoice(doc):
 			dpi.name,
 			dpi.posting_date,
 			dpi.net_total,
+			dpi.total_taxes_and_charges,
 			dpi.grand_total,
 		)
 		.where((dpi.sales_order == doc.items[0].sales_order) & (dpi.docstatus == 1))
 		.orderby(dpi.posting_date)
 		.orderby(dpi.creation)
 	).run(as_dict=True)
+
+	for row in down_payment_invoices:
+		# A Down Payment Invoice with no items is either mid-creation or was left corrupt by a
+		# failed migration (see patches/backfill_down_payment_invoice_items.py) -- its totals
+		# columns default to 0, which would silently under-credit the customer on this final
+		# invoice by the full down payment amount. Refuse rather than credit 0.
+		if not frappe.db.exists("Down Payment Invoice Item", {"parent": row.name}):
+			frappe.throw(
+				_(
+					"Down Payment Invoice {0} has no items and cannot be credited on this Final Invoice."
+				).format(row.name)
+			)
 
 	ple = DocType("Payment Ledger Entry")
 	invoice_names = [row.name for row in down_payment_invoices]
@@ -439,7 +452,10 @@ def append_down_payment_invoice_to_final_invoice(doc):
 	doc.set("custom_down_payments", [])
 	for row in down_payment_invoices:
 		net_total = flt(row.net_total)
-		tax_amount = flt(flt(row.grand_total) - net_total)
+		tax_amount = flt(
+			row.total_taxes_and_charges,
+			frappe.get_precision("Down Payment Invoice", "total_taxes_and_charges"),
+		)
 		doc.append(
 			"custom_down_payments",
 			{

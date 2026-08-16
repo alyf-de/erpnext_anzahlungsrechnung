@@ -17,12 +17,20 @@ def get_down_payment_invoice_print_tax_rows(doc) -> list[dict]:
 
 
 def get_down_payment_invoice_item_rows(doc) -> list[dict]:
-	"""Jinja helper: one row per item, with that item's own rate and tax, for the print body."""
+	"""Jinja helper: one row per item, with that item's own rate and tax, for the print body.
+
+	Read the rate/tax off the item's own ``item_wise_tax_details`` rows, not off
+	``item_tax_template`` -- the template is usually unset (the ordinary setup keeps the rate
+	on the tax row instead), which made every body row print "0% / 0,00" regardless of what
+	the footer's per-rate buckets showed.
+	"""
 	rows = []
+	item_wise_tax_details = doc.get("item_wise_tax_details") or []
 	for item in doc.get("items") or []:
-		rate = _rate_from_item_tax_template(item)
+		taxed = [r for r in item_wise_tax_details if r.item_row == item.name and flt(r.amount) != 0]
+		rate = flt(taxed[0].rate) if taxed else 0.0
+		tax = flt(sum(flt(r.amount) for r in taxed))
 		net = flt(item.net_amount)
-		tax = flt(net * rate / 100) if rate else 0.0
 		rows.append(
 			{
 				"item_name": item.item_name,

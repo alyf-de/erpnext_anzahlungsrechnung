@@ -15,9 +15,20 @@ Design (PLAN.md §6, PLAN-AMENDMENTS A7):
   ``position_description``) are read with **raw SQL**, not ``doc.<field>`` — those fields are
   removed from the DocType JSON in a later step, but Frappe never drops the DB column on migrate,
   so the data survives and this patch stays independent of that step's ordering.
-- **Guard, never throw.** A malformed / mis-configured legacy document (unresolvable tax account,
-  a purged Sales Order, a residual that does not reconcile) is skipped and logged; it must never
-  block ``bench migrate``.
+- **Guard per document, then throw for the batch.** A malformed / mis-configured legacy document
+  (unresolvable tax account, a purged Sales Order, a residual that does not reconcile) is skipped
+  and logged via a per-document savepoint, so one bad row never discards the documents already
+  migrated in the same batch. PLAN-AMENDMENTS A7 said "guard, never throw" for the whole patch;
+  that guidance is overridden here. A skipped Down Payment Invoice keeps its new
+  ``grand_total``/``net_total``/``total_taxes_and_charges`` columns at DEFAULT 0, and
+  ``scripts/sales_invoice.append_down_payment_invoice_to_final_invoice`` trusts those columns when
+  crediting a customer's down payment on a final invoice -- so letting ``bench migrate`` exit 0
+  with skipped documents would silently under-credit customers by the full down payment amount on
+  every final invoice against them. That is worse than a blocked migrate, so ``execute()`` collects
+  every skipped name and ``frappe.throw``s the list once the batch is done. Re-running
+  ``bench migrate`` after an operator fixes the underlying data is safe -- the idempotency guard in
+  ``_migrate_one`` only inserts child rows for a DPI that has none yet, so a re-run only retries the
+  documents that were skipped.
 - Migrated ``taxes`` rows use ``charge_type = "On Net Total"``, *not* ``"Actual"`` as PLAN.md §6
   originally specified. ``"Actual"`` distributes its ``tax_amount`` across *every* item by net share,
   regardless of each item's own rate for that tax account, and ``adjust_rounding_in_item_wise_tax_
@@ -39,6 +50,7 @@ import re
 from collections import defaultdict
 
 import frappe
+from frappe import _
 from frappe.model.document import bulk_insert
 from frappe.utils import flt
 
@@ -384,11 +396,17 @@ def execute():
 		order_by="creation",
 	)
 	for i, row in enumerate(rows):
+		frappe.db.savepoint("dpi_backfill")
 		try:
 			if _migrate_one(row.name, row.docstatus, row.sales_order, row.company):
 				migrated += 1
 		except Exception:
-			frappe.db.rollback()
+			# Roll back only this document's writes, not the whole batch since the last
+			# commit -- execute_patch() opens no savepoint of its own and only commits
+			# every 200 rows here, so a bare frappe.db.rollback() would silently discard
+			# every document already migrated since the last commit boundary while still
+			# counting them as migrated.
+			frappe.db.rollback(save_point="dpi_backfill")
 			skipped.append(row.name)
 			frappe.log_error(
 				title="backfill_down_payment_invoice_items: skipped",
@@ -402,6 +420,22 @@ def execute():
 		f"backfill_down_payment_invoice_items: migrated {migrated}, skipped {len(skipped)}"
 		+ (f" ({', '.join(skipped)})" if skipped else "")
 	)
+	if skipped:
+		# Do not exit 0. A skipped Down Payment Invoice is left with its new totals columns
+		# at DEFAULT 0, and scripts/sales_invoice.append_down_payment_invoice_to_final_invoice
+		# trusts those columns when crediting a customer's down payment on the final invoice --
+		# silently under-crediting them by the full down payment amount. That is worse than a
+		# blocked `bench migrate`, so fail loudly and let an operator fix the underlying data
+		# (e.g. backfill a missing Sales Order Item income account) and re-run; the idempotency
+		# guard in _migrate_one only inserts child rows for a DPI that has none yet, so a
+		# re-run is safe and only touches the documents that were skipped.
+		frappe.throw(
+			_(
+				"backfill_down_payment_invoice_items: {0} Down Payment Invoice(s) could not be "
+				"migrated and were skipped: {1}. See the Error Log for details. Fix the underlying "
+				"data and re-run `bench migrate`."
+			).format(len(skipped), ", ".join(skipped))
+		)
 
 
 def _migrate_one(name: str, docstatus: int, sales_order: str | None, company: str | None) -> bool:
@@ -637,12 +671,6 @@ def _migrate_one(name: str, docstatus: int, sales_order: str | None, company: st
 			"base_grand_total": down_payment_amount,
 			"currency": currency,
 			"conversion_rate": 1,
-			# "Net Total", not "Grand Total" (the DocType default written by the parent
-			# controller): taxes_and_totals.calculate_taxes() reads doc.discount_amount /
-			# doc.additional_discount_percentage as bare attributes -- which don't exist on
-			# this doctype -- whenever apply_discount_on == "Grand Total" and doc.taxes is
-			# non-empty. "Net Total" short-circuits that branch. See down_payment_invoice.py.
-			"apply_discount_on": "Net Total",
 		},
 		update_modified=False,
 	)

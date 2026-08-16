@@ -301,7 +301,8 @@
    "fieldname": "apply_discount_on",
    "fieldtype": "Select",
    "label": "Apply Additional Discount On",
-   "options": "\nGrand Total\nNet Total"
+   "options": "Net Total",
+   "read_only": 1
   },
   {
    "default": "0",

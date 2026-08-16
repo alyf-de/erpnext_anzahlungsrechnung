@@ -13,7 +13,7 @@
  ],
  "fields": [
   {
-   "description": "Used when a <b>Down Payment Invoice</b> is created from a <b>Sales Order</b> (partial bill). Fills <i>Position Name</i> and <i>Position Description</i> on the new invoice. Optional Jinja: <code>{{ doc.fieldname }}</code> where <code>doc</code> is the draft <b>Down Payment Invoice</b> (e.g. <code>sales_order</code>, <code>down_payment_percentage</code>, <code>down_payment_amount</code>, <code>customer</code>, <code>company</code>).",
+   "description": "Used when a <b>Down Payment Invoice</b> is created from a <b>Sales Order</b> (partial bill). Fills <i>Item Name</i> on every item row, and <i>Description</i> on the first item row, of the new invoice. Optional Jinja: <code>{{ doc.fieldname }}</code> where <code>doc</code> is the draft <b>Down Payment Invoice</b> (e.g. <code>sales_order</code>, <code>down_payment_percentage</code>, <code>grand_total</code>, <code>customer</code>, <code>company</code>) -- totals are already calculated by the time this renders.",
    "fieldname": "default_position_settings_section",
    "fieldtype": "Section Break",
    "label": "Default Position Settings"
