@@ -43,14 +43,7 @@
   "conversion_rate",
   "apply_discount_on",
   "ignore_pricing_rule",
-  "item_wise_tax_details",
-  "section_payment",
-  "total_sales_order_amount",
-  "column_break_pay",
-  "down_payment_amount",
-  "section_break_eiba",
-  "position_name",
-  "position_description"
+  "item_wise_tax_details"
  ],
  "fields": [
   {
@@ -322,53 +315,6 @@
    "label": "Item Wise Tax Details",
    "no_copy": 1,
    "options": "Item Wise Tax Detail"
-  },
-  {
-   "fieldname": "section_payment",
-   "fieldtype": "Section Break",
-   "hidden": 1,
-   "label": "Payment Details"
-  },
-  {
-   "fetch_from": "sales_order.grand_total",
-   "fetch_if_empty": 1,
-   "fieldname": "total_sales_order_amount",
-   "fieldtype": "Currency",
-   "hidden": 1,
-   "label": "Total Sales Order Amount",
-   "options": "Company:company:default_currency",
-   "read_only": 1
-  },
-  {
-   "fieldname": "column_break_pay",
-   "fieldtype": "Column Break"
-  },
-  {
-   "fieldname": "down_payment_amount",
-   "fieldtype": "Currency",
-   "hidden": 1,
-   "label": "Down Payment Amount",
-   "options": "Company:company:default_currency",
-   "read_only": 1
-  },
-  {
-   "fieldname": "section_break_eiba",
-   "fieldtype": "Section Break",
-   "hidden": 1
-  },
-  {
-   "fieldname": "position_name",
-   "fieldtype": "Data",
-   "hidden": 1,
-   "label": "Position Name",
-   "read_only": 1
-  },
-  {
-   "fieldname": "position_description",
-   "fieldtype": "Text Editor",
-   "hidden": 1,
-   "label": "Position Description",
-   "read_only": 1
   }
  ],
  "grid_page_length": 50,
