@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import frappe
 from erpnext.controllers.accounts_controller import get_discount_date, get_due_date
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice as erpnext_make_sales_invoice
@@ -6,6 +8,19 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, today
 
 from erpnext_anzahlungsrechnung.scripts.utils import has_additional_discount_on_grand_total
+
+# Copied verbatim from the Sales Order's own tax rows onto the Down Payment Invoice.
+# Not tax_amount/total/base_* -- those are recomputed by calculate_taxes_and_totals().
+TAX_COPY_FIELDS = (
+	"charge_type",
+	"row_id",
+	"account_head",
+	"cost_center",
+	"description",
+	"rate",
+	"included_in_print_rate",
+	"account_currency",
+)
 
 
 def before_validate(doc, event):
@@ -78,10 +93,13 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	dpi.customer = so.customer
 	dpi.company = so.company
 	dpi.posting_date = today()
-	dpi.total_sales_order_amount = flt(so.grand_total)
-	precision = frappe.get_precision("Down Payment Invoice", "down_payment_amount") or 2
-	dpi.down_payment_percentage = share
-	dpi.down_payment_amount = flt(flt(so.grand_total) * share / 100.0, precision)
+	dpi.down_payment_percentage = share  # informational only; validate() derives the real value
+
+	for row in _build_dpi_items_for_percentage(so, share):
+		dpi.append("items", row)
+	for tax in so.taxes:
+		dpi.append("taxes", {f: tax.get(f) for f in TAX_COPY_FIELDS})
+	dpi.taxes_and_charges = so.taxes_and_charges
 
 	dpi.letter_head = frappe.db.get_value("Company", so.company, "default_letter_head")
 	if not dpi.letter_head:
@@ -90,6 +108,7 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	settings = frappe.get_cached_doc("Down Payment Settings")
 	_apply_default_position_from_settings(dpi, settings)
 	dpi.due_date = frappe.utils.add_to_date(frappe.utils.getdate(), days=settings.credit_days)
+	dpi.run_method("calculate_taxes_and_totals")
 
 	# Set project if custom field exists
 	if frappe.db.exists(
@@ -103,6 +122,40 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	):
 		dpi.custom_project = so.project
 	return dpi
+
+
+def _build_dpi_items_for_percentage(so, pct):
+	"""One synthetic row per (income account, item tax template) group, at ``pct`` of that
+	group's net. Grouping by income account keeps the Journal Entry automation exact; grouping
+	by item tax template keeps the VAT breakup exact. ``income_account`` is guaranteed non-empty
+	by ``validate_income_account_for_down_payment_sales_order`` (Sales Order ``before_validate``).
+	"""
+	groups = OrderedDict()
+	for row in so.items:
+		key = (row.income_account, row.item_tax_template or "")
+		g = groups.setdefault(
+			key, {"net": 0.0, "cost_center": row.cost_center, "project": row.project or so.project}
+		)
+		g["net"] += flt(row.net_amount) or flt(row.amount)
+
+	precision = frappe.get_precision("Down Payment Invoice Item", "rate")
+	items = []
+	for (income_account, template), g in groups.items():
+		amount = flt(g["net"] * flt(pct) / 100, precision)
+		if not amount:
+			continue
+		items.append(
+			{
+				"qty": 1,
+				"rate": amount,
+				"amount": amount,
+				"income_account": income_account,
+				"item_tax_template": template or None,
+				"cost_center": g["cost_center"],
+				"project": g["project"],
+			}
+		)
+	return items
 
 
 def _apply_final_invoice_payment_schedule_from_sales_order(so, si):
@@ -184,20 +237,29 @@ def _payment_schedule_grand_totals_for_final_invoice(si):
 
 
 def _apply_default_position_from_settings(dpi, settings):
-	"""Fill *Position Name* / *Position Description* from **Down Payment Settings** (Jinja, `doc` = draft DPI)."""
+	"""Fill each item's *Item Name* (and the first item's *Description*) from **Down Payment
+	Settings** (Jinja, `doc` = draft DPI). Must run after `dpi.down_payment_percentage` is set --
+	the settings template and the German fallback below both render that field."""
+	if not dpi.get("items"):
+		return
+
 	ctx = {"doc": dpi}
 	name_tpl = (settings.default_position_name or "").strip()
 	desc_tpl = (settings.default_position_description or "").strip()
 
 	if name_tpl:
 		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
-		dpi.position_name = frappe.render_template(name_tpl, ctx)
+		item_name = frappe.render_template(name_tpl, ctx)
 	else:
-		dpi.position_name = _("Down Payment")
+		item_name = _("Down Payment")
+	for row in dpi.items:
+		row.item_name = item_name
+
 	if desc_tpl:
 		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
-		dpi.position_description = frappe.render_template(desc_tpl, ctx)
+		description = frappe.render_template(desc_tpl, ctx)
 	else:
-		dpi.position_description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
+		description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
 			flt(dpi.down_payment_percentage, 2)
 		)
+	dpi.items[0].description = description
