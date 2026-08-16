@@ -5,46 +5,14 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_tax_allocation import (
-	_round_gross_total,
-	build_tax_rows_for_down_payment,
+	_aggregate_item_wise_by_rate,
 )
 
 
 class TestDownPaymentTaxAllocation(IntegrationTestCase):
-	def test_scales_by_grand_total(self):
-		so = frappe._dict(
-			grand_total=12900,
-			item_wise_tax_details=[
-				frappe._dict(rate=19, taxable_amount=10000, amount=1900),
-				frappe._dict(rate=0, taxable_amount=1000, amount=0),
-			],
-		)
-		rows = build_tax_rows_for_down_payment(so, 2580)
-		self.assertEqual(len(rows), 2)
-		total = sum(r["net_amount"] + r["tax_amount"] for r in rows)
-		self.assertAlmostEqual(total, 2580, places=2)
-		self.assertAlmostEqual(rows[0]["net_amount"], 2000, places=2)
-		self.assertAlmostEqual(rows[0]["tax_amount"], 380, places=2)
-		self.assertAlmostEqual(rows[1]["net_amount"], 200, places=2)
-		self.assertAlmostEqual(rows[1]["tax_amount"], 0, places=2)
-
-	def test_merges_same_rate(self):
-		so = frappe._dict(
-			grand_total=11900,
-			item_wise_tax_details=[
-				frappe._dict(rate=19, taxable_amount=5000, amount=950),
-				frappe._dict(rate=19, taxable_amount=5000, amount=950),
-			],
-		)
-		rows = build_tax_rows_for_down_payment(so, 2380)
-		self.assertEqual(len(rows), 1)
-		self.assertAlmostEqual(rows[0]["net_amount"], 2000, places=2)
-		self.assertAlmostEqual(rows[0]["tax_amount"], 380, places=2)
-
 	def test_multi_sales_tax_rows_do_not_double_count_zero_bucket(self):
-		"""Same SO shape as multiple ``taxes`` rows: extra item_wise rows with amount 0."""
-		so = frappe._dict(
-			grand_total=12900,
+		"""Same shape as multiple ``taxes`` rows on the DPI itself: extra item_wise rows with amount 0."""
+		doc = frappe._dict(
 			items=[
 				frappe._dict(name="i1", net_amount=10000, item_tax_template="19 % - MG"),
 				frappe._dict(name="i2", net_amount=1000, item_tax_template="0 % - MG"),
@@ -60,25 +28,10 @@ class TestDownPaymentTaxAllocation(IntegrationTestCase):
 				frappe._dict(item_row="i2", rate=0, taxable_amount=1000, amount=0),
 			],
 		)
-		rows = build_tax_rows_for_down_payment(so, 2580)
-		self.assertEqual(len(rows), 2)
-		self.assertEqual(rows[0]["tax_description"], "Umsatzsteuer 19 %")
-		self.assertAlmostEqual(rows[0]["net_amount"], 2000, places=2)
-		self.assertAlmostEqual(rows[0]["tax_amount"], 380, places=2)
-		self.assertAlmostEqual(rows[1]["net_amount"], 200, places=2)
-		self.assertAlmostEqual(rows[1]["tax_amount"], 0, places=2)
-		net_sum = sum(r["net_amount"] for r in rows)
-		self.assertAlmostEqual(net_sum, 2200, places=2)
-		self.assertGreaterEqual(rows[1]["tax_amount"], 0)
-
-	def test_rounding_diff_applies_to_highest_tax_row_not_last(self):
-		"""If gross sum misses target, adjust the row with the most tax (not always the last / 0% row)."""
-		rows = [
-			{"net_amount": 2000.0, "tax_amount": 380.0, "gross_amount": 2380.0},
-			{"net_amount": 2400.0, "tax_amount": 0.0, "gross_amount": 2400.0},
-		]
-		_round_gross_total(rows, 2580.0, 2)
-		self.assertAlmostEqual(rows[0]["tax_amount"], 380.0 - 2200.0, places=2)
-		self.assertAlmostEqual(rows[1]["tax_amount"], 0.0, places=2)
-		self.assertAlmostEqual(rows[0]["gross_amount"], 2000.0 + rows[0]["tax_amount"], places=2)
-		self.assertAlmostEqual(sum(r["net_amount"] + r["tax_amount"] for r in rows), 2580.0, places=2)
+		buckets = _aggregate_item_wise_by_rate(doc)
+		self.assertEqual(len(buckets), 2)
+		self.assertEqual(buckets[19]["tax_description"], "Umsatzsteuer 19 %")
+		self.assertAlmostEqual(buckets[19]["taxable"], 10000, places=2)
+		self.assertAlmostEqual(buckets[19]["tax"], 1900, places=2)
+		self.assertAlmostEqual(buckets[0]["taxable"], 1000, places=2)
+		self.assertAlmostEqual(buckets[0]["tax"], 0, places=2)
