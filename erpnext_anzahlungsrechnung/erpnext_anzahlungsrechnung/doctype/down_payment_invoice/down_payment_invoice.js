@@ -7,6 +7,13 @@ erpnext.sales_common.setup_selling_controller();
 
 const DownPaymentInvoiceController = class DownPaymentInvoiceController extends erpnext.selling
 	.SellingController {
+	setup() {
+		// Skip SellingController.setup()'s stock-UOM-editing toggle (it targets a "stock_qty"
+		// grid column Down Payment Invoice Item does not have -- no stock item on a down
+		// payment) by calling TransactionController's setup directly instead of super.setup().
+		erpnext.TransactionController.prototype.setup.call(this);
+	}
+
 	refresh() {
 		super.refresh && super.refresh();
 
