@@ -18,9 +18,17 @@ Design (PLAN.md §6, PLAN-AMENDMENTS A7):
 - **Guard, never throw.** A malformed / mis-configured legacy document (unresolvable tax account,
   a purged Sales Order, a residual that does not reconcile) is skipped and logged; it must never
   block ``bench migrate``.
-- Migrated ``taxes`` rows use ``charge_type = "Actual"``, so their stored amounts are frozen even if
-  the document is later amended and re-validated. That is intentional: an amend is treated as a new
-  document where the user re-picks items; it must not silently re-derive different numbers.
+- Migrated ``taxes`` rows use ``charge_type = "On Net Total"``, *not* ``"Actual"`` as PLAN.md §6
+  originally specified. ``"Actual"`` distributes its ``tax_amount`` across *every* item by net share,
+  regardless of each item's own rate for that tax account, and ``adjust_rounding_in_item_wise_tax_
+  details`` only counts an item's share when its own rate for that account is non-zero -- for any
+  document with more than one ``(income_account, rate)`` bucket that combination can never
+  reconcile with itself, so re-validating a migrated draft (or its amended copy) always threw
+  ``"Item Wise Tax Details do not match with Taxes and Charges"``. ``"On Net Total"`` computes each
+  item's share from its own rate and is always self-consistent on re-validation. The numbers stored
+  by this patch are still bit-identical to what was printed as long as the document is never
+  re-saved; a later edit-and-save (or amend) may recompute this row's ``tax_amount`` by a rounding
+  cent, which is expected and acceptable -- only the frozen, untouched state needs to match exactly.
 - Insertion order inside one DPI is fixed by a data dependency: ``Down Payment Invoice Item`` rows
   first, then ``Sales Taxes and Charges`` rows, and only then ``Item Wise Tax Detail`` rows — its
   ``item_row`` / ``tax_row`` are the child *row names* of the two tables above, so those names must
@@ -501,7 +509,21 @@ def _migrate_one(name: str, docstatus: int, sales_order: str | None, company: st
 		tax = frappe.new_doc("Sales Taxes and Charges")
 		tax.update(
 			{
-				"charge_type": "Actual",
+				# "On Net Total", not "Actual": erpnext.controllers.taxes_and_totals
+				# distributes an "Actual" row's tax_amount proportionally across *every*
+				# item by net share (item.net_amount / doc.net_total), regardless of that
+				# item's own rate for this account, and then only counts items whose own
+				# rate for this account is non-zero when reconciling the total (see
+				# adjust_rounding_in_item_wise_tax_details). For any document with more
+				# than one (income_account, rate) bucket that structurally never
+				# reconciles, so a later re-validate (edit-and-save a draft, or amend)
+				# throws "Item Wise Tax Details do not match with Taxes and Charges".
+				# "On Net Total" computes each item's share from *its own* rate (via
+				# item_tax_template -> item_tax_rate), so a re-validate always reconciles
+				# with itself, at the cost of possibly recomputing this row's tax_amount by
+				# a rounding cent if the document is ever actually re-saved -- acceptable;
+				# only the untouched, never-resaved values need to be bit-identical.
+				"charge_type": "On Net Total",
 				"account_head": account_head,
 				"description": desc_by_rate.get(rate) or f"Tax {_format_rate_label(rate)}",
 				"rate": rate,
@@ -615,7 +637,12 @@ def _migrate_one(name: str, docstatus: int, sales_order: str | None, company: st
 			"base_grand_total": down_payment_amount,
 			"currency": currency,
 			"conversion_rate": 1,
-			"apply_discount_on": "Grand Total",
+			# "Net Total", not "Grand Total" (the DocType default written by the parent
+			# controller): taxes_and_totals.calculate_taxes() reads doc.discount_amount /
+			# doc.additional_discount_percentage as bare attributes -- which don't exist on
+			# this doctype -- whenever apply_discount_on == "Grand Total" and doc.taxes is
+			# non-empty. "Net Total" short-circuits that branch. See down_payment_invoice.py.
+			"apply_discount_on": "Net Total",
 		},
 		update_modified=False,
 	)
