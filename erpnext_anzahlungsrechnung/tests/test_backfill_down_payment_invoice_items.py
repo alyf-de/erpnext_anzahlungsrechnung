@@ -21,7 +21,28 @@ from erpnext_anzahlungsrechnung.patches.backfill_down_payment_invoice_items impo
 COMPANY = "_Test Company"
 
 
+# The legacy scalar columns the patch reads. They are gone from the DocType JSON
+# ("chore(Down Payment Invoice): drop legacy amount fields") but survive on any site that was
+# migrated from the old schema, because Frappe never drops columns. A *fresh* install -- CI, or a
+# new developer bench -- builds the table from the current JSON and never had them, so these tests
+# have to recreate them before they can fabricate a pre-refactor document.
+LEGACY_COLUMNS = {
+	"down_payment_amount": "decimal(21,9) not null default 0",
+	"total_sales_order_amount": "decimal(21,9) not null default 0",
+	"position_name": "varchar(140) default null",
+	"position_description": "longtext default null",
+}
+
+
 class TestBackfillDownPaymentInvoiceItems(FrappeTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		existing = frappe.db.get_table_columns("Down Payment Invoice")
+		for column, definition in LEGACY_COLUMNS.items():
+			if column not in existing:
+				frappe.db.sql_ddl(f"alter table `tabDown Payment Invoice` add column `{column}` {definition}")
+
 	def test_migrates_legacy_dpi_into_items_and_taxes(self):
 		"""A legacy-shaped DPI (``down_payment_amount`` set via raw SQL, no items/taxes) gets real
 		child rows whose totals reconcile with the frozen legacy amount, and whose docstatus

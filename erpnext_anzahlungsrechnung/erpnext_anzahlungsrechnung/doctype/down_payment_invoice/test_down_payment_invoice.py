@@ -170,18 +170,19 @@ class IntegrationTestDownPaymentInvoice(FrappeTestCase):
 			row.insert(ignore_permissions=True)
 
 	def _make_down_payment_sales_order(self, item_rows):
-		item = self._get_or_create_test_item()
 		so = frappe.new_doc("Sales Order")
 		so.customer = "_Test Customer"
 		so.company = COMPANY
 		so.transaction_date = today()
 		so.delivery_date = today()
 		so.custom_invoice_type = "Down Payment Invoice"
-		for row in item_rows:
+		# A distinct Item per row: Selling Settings' "Allow Item to Be Added Multiple Times in a
+		# Transaction" is off by default, and the rows only need to differ by income account.
+		for idx, row in enumerate(item_rows, start=1):
 			so.append(
 				"items",
 				{
-					"item_code": item,
+					"item_code": self._get_or_create_test_item(idx),
 					"qty": 1,
 					"rate": row["net_amount"],
 					"income_account": row["income_account"],
@@ -192,8 +193,8 @@ class IntegrationTestDownPaymentInvoice(FrappeTestCase):
 		so.submit()
 		return so
 
-	def _get_or_create_test_item(self):
-		item_code = "_Test DPI Service Item"
+	def _get_or_create_test_item(self, idx=1):
+		item_code = f"_Test DPI Service Item {idx}"
 		if frappe.db.exists("Item", item_code):
 			return item_code
 		item = frappe.get_doc(
