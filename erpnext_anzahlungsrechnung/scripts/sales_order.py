@@ -48,6 +48,8 @@ def validate_income_account_for_down_payment_sales_order(doc):
 			)
 
 
+# Do not annotate target_doc -- see quotation.make_sales_order (f7fdcd5).
+# nosemgrep: frappe-semgrep-rules.rules.security.missing-argument-type-hint
 @frappe.whitelist()
 def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
