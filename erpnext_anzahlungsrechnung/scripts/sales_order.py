@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import frappe
 from erpnext.controllers.accounts_controller import get_discount_date, get_due_date
 from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice as erpnext_make_sales_invoice
@@ -6,6 +8,19 @@ from frappe import _
 from frappe.utils import cint, flt, getdate, today
 
 from erpnext_anzahlungsrechnung.scripts.utils import has_additional_discount_on_grand_total
+
+# Copied verbatim from the Sales Order's own tax rows onto the Down Payment Invoice.
+# Not tax_amount/total/base_* -- those are recomputed by calculate_taxes_and_totals().
+TAX_COPY_FIELDS = (
+	"charge_type",
+	"row_id",
+	"account_head",
+	"cost_center",
+	"description",
+	"rate",
+	"included_in_print_rate",
+	"account_currency",
+)
 
 
 def before_validate(doc, event):
@@ -33,6 +48,8 @@ def validate_income_account_for_down_payment_sales_order(doc):
 			)
 
 
+# Do not annotate target_doc -- see quotation.make_sales_order (f7fdcd5).
+# nosemgrep: frappe-semgrep-rules.rules.security.missing-argument-type-hint
 @frappe.whitelist()
 def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	"""Map Sales Order → **Down Payment Invoice** (partial) or **Sales Invoice** final (full billing)."""
@@ -42,6 +59,9 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	payment_schedule_row = args.get("payment_schedule_row")
 
 	so = frappe.get_doc("Sales Order", source_name)
+	# get_doc does not check read permission, and the partial branch below builds the invoice by
+	# hand rather than through get_mapped_doc, so nothing else would.
+	so.check_permission("read")
 	if so.docstatus != 1:
 		frappe.throw(_("Sales Order must be submitted."))
 	if so.custom_invoice_type == "Invoice":
@@ -78,16 +98,21 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	dpi.customer = so.customer
 	dpi.company = so.company
 	dpi.posting_date = today()
-	dpi.total_sales_order_amount = flt(so.grand_total)
-	precision = frappe.get_precision("Down Payment Invoice", "down_payment_amount") or 2
-	dpi.down_payment_percentage = share
-	dpi.down_payment_amount = flt(flt(so.grand_total) * share / 100.0, precision)
+	dpi.down_payment_percentage = share  # informational only; validate() derives the real value
+
+	for row in _build_dpi_items_for_percentage(so, share):
+		dpi.append("items", row)
+	_copy_so_taxes_to_dpi(dpi, so)
+	dpi.taxes_and_charges = so.taxes_and_charges
 
 	dpi.letter_head = frappe.db.get_value("Company", so.company, "default_letter_head")
 	if not dpi.letter_head:
 		frappe.throw(_("Set Default Letter Head on Company {0}.").format(so.company))
 
 	settings = frappe.get_cached_doc("Down Payment Settings")
+	# Calculate totals before rendering the settings templates -- default_position_description
+	# can reference {{ doc.grand_total }}, which would otherwise still be 0.0 at render time.
+	dpi.run_method("calculate_taxes_and_totals")
 	_apply_default_position_from_settings(dpi, settings)
 	dpi.due_date = frappe.utils.add_to_date(frappe.utils.getdate(), days=settings.credit_days)
 
@@ -103,6 +128,73 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	):
 		dpi.custom_project = so.project
 	return dpi
+
+
+def _copy_so_taxes_to_dpi(dpi, so):
+	"""Copy the Sales Order's tax rows onto the DPI, skipping ``charge_type == "Actual"`` rows.
+
+	TAX_COPY_FIELDS deliberately excludes ``tax_amount``/``total``/``base_*`` so ordinary rate-based
+	rows scale themselves down to the DPI's smaller net via ``calculate_taxes_and_totals()``. But for
+	an ``"Actual"`` row ``tax_amount`` *is* the charge (a flat fee, not a rate), and nothing
+	recomputes it -- copying the row without its amount would leave a visible 0,00 charge on the
+	DPI, and a flat SO-wide fee should not be pro-rated into a down payment anyway. Skip it.
+
+	Skipping a row can break the ``row_id`` reference other rows use for "On Previous Row *" charge
+	types (a 1-based index into the same table), so also skip any row chained off a skipped row and
+	renumber the surviving rows' ``row_id`` to match their new position.
+	"""
+	dropped_idx = {t.idx for t in so.taxes if t.charge_type == "Actual"}
+	changed = True
+	while changed:
+		changed = False
+		for t in so.taxes:
+			if t.idx not in dropped_idx and t.row_id and cint(t.row_id) in dropped_idx:
+				dropped_idx.add(t.idx)
+				changed = True
+
+	kept = [t for t in so.taxes if t.idx not in dropped_idx]
+	old_to_new_idx = {t.idx: new_idx for new_idx, t in enumerate(kept, start=1)}
+
+	for tax in kept:
+		row = {f: tax.get(f) for f in TAX_COPY_FIELDS}
+		if row.get("row_id"):
+			new_row_id = old_to_new_idx.get(cint(row["row_id"]))
+			row["row_id"] = str(new_row_id) if new_row_id else None
+		dpi.append("taxes", row)
+
+
+def _build_dpi_items_for_percentage(so, pct):
+	"""One synthetic row per (income account, item tax template) group, at ``pct`` of that
+	group's net. Grouping by income account keeps the Journal Entry automation exact; grouping
+	by item tax template keeps the VAT breakup exact. ``income_account`` is guaranteed non-empty
+	by ``validate_income_account_for_down_payment_sales_order`` (Sales Order ``before_validate``).
+	"""
+	groups = OrderedDict()
+	for row in so.items:
+		key = (row.income_account, row.item_tax_template or "")
+		g = groups.setdefault(
+			key, {"net": 0.0, "cost_center": row.cost_center, "project": row.project or so.project}
+		)
+		g["net"] += flt(row.net_amount) or flt(row.amount)
+
+	precision = frappe.get_precision("Down Payment Invoice Item", "rate")
+	items = []
+	for (income_account, template), g in groups.items():
+		amount = flt(g["net"] * flt(pct) / 100, precision)
+		if not amount:
+			continue
+		items.append(
+			{
+				"qty": 1,
+				"rate": amount,
+				"amount": amount,
+				"income_account": income_account,
+				"item_tax_template": template or None,
+				"cost_center": g["cost_center"],
+				"project": g["project"],
+			}
+		)
+	return items
 
 
 def _apply_final_invoice_payment_schedule_from_sales_order(so, si):
@@ -184,20 +276,29 @@ def _payment_schedule_grand_totals_for_final_invoice(si):
 
 
 def _apply_default_position_from_settings(dpi, settings):
-	"""Fill *Position Name* / *Position Description* from **Down Payment Settings** (Jinja, `doc` = draft DPI)."""
+	"""Fill each item's *Item Name* (and the first item's *Description*) from **Down Payment
+	Settings** (Jinja, `doc` = draft DPI). Must run after `dpi.down_payment_percentage` is set --
+	the settings template and the German fallback below both render that field."""
+	if not dpi.get("items"):
+		return
+
 	ctx = {"doc": dpi}
 	name_tpl = (settings.default_position_name or "").strip()
 	desc_tpl = (settings.default_position_description or "").strip()
 
 	if name_tpl:
 		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
-		dpi.position_name = frappe.render_template(name_tpl, ctx)
+		item_name = frappe.render_template(name_tpl, ctx)
 	else:
-		dpi.position_name = _("Down Payment")
+		item_name = _("Down Payment")
+	for row in dpi.items:
+		row.item_name = item_name
+
 	if desc_tpl:
 		# nosemgrep: frappe-semgrep-rules.rules.security.frappe-ssti
-		dpi.position_description = frappe.render_template(desc_tpl, ctx)
+		description = frappe.render_template(desc_tpl, ctx)
 	else:
-		dpi.position_description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
+		description = _("Es werden {0} % des Gesamtauftragswerts in Rechnung gestellt.").format(
 			flt(dpi.down_payment_percentage, 2)
 		)
+	dpi.items[0].description = description
