@@ -172,6 +172,7 @@ def make_payment_entry(source_name: str, reference_date: str | None = None):
 	"""Same as **Sales Order** > **Create** > **Payment** for the linked order, with *Paid Amount* set to this invoice's *Grand Total*."""
 	frappe.has_permission("Payment Entry", "create", throw=True)
 	dpi = frappe.get_doc("Down Payment Invoice", source_name)
+	dpi.check_permission("read")
 	if dpi.docstatus != 1:
 		frappe.throw(_("Submit the Down Payment Invoice before creating a payment."))
 	if not dpi.sales_order:

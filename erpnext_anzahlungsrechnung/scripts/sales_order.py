@@ -59,6 +59,9 @@ def make_sales_invoice_from_sales_order(source_name: str, target_doc=None):
 	payment_schedule_row = args.get("payment_schedule_row")
 
 	so = frappe.get_doc("Sales Order", source_name)
+	# get_doc does not check read permission, and the partial branch below builds the invoice by
+	# hand rather than through get_mapped_doc, so nothing else would.
+	so.check_permission("read")
 	if so.docstatus != 1:
 		frappe.throw(_("Sales Order must be submitted."))
 	if so.custom_invoice_type == "Invoice":
