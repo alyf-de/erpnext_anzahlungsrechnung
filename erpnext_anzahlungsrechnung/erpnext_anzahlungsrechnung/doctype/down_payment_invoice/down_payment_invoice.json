@@ -109,8 +109,7 @@
    "fieldname": "down_payment_percentage",
    "fieldtype": "Percent",
    "label": "Down Payment Percentage",
-   "read_only": 1,
-   "reqd": 1
+   "read_only": 1
   },
   {
    "fieldname": "letter_head",
