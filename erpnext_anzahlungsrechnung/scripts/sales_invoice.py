@@ -7,7 +7,6 @@ from frappe.utils.formatters import format_value
 
 from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_invoice_accounting import (
 	build_reversed_journal_rows_from_entries,
-	get_down_payment_net_total,
 	post_final_invoice_down_payment_neutralization_journals,
 )
 from erpnext_anzahlungsrechnung.scripts.utils import (
@@ -395,12 +394,26 @@ def append_down_payment_invoice_to_final_invoice(doc):
 		.select(
 			dpi.name,
 			dpi.posting_date,
-			dpi.down_payment_amount,
+			dpi.net_total,
+			dpi.total_taxes_and_charges,
+			dpi.grand_total,
 		)
 		.where((dpi.sales_order == doc.items[0].sales_order) & (dpi.docstatus == 1))
 		.orderby(dpi.posting_date)
 		.orderby(dpi.creation)
 	).run(as_dict=True)
+
+	for row in down_payment_invoices:
+		# A Down Payment Invoice with no items is either mid-creation or was left corrupt by a
+		# failed migration (see patches/backfill_down_payment_invoice_items.py) -- its totals
+		# columns default to 0, which would silently under-credit the customer on this final
+		# invoice by the full down payment amount. Refuse rather than credit 0.
+		if not frappe.db.exists("Down Payment Invoice Item", {"parent": row.name}):
+			frappe.throw(
+				_(
+					"Down Payment Invoice {0} has no items and cannot be credited on this Final Invoice."
+				).format(row.name)
+			)
 
 	ple = DocType("Payment Ledger Entry")
 	invoice_names = [row.name for row in down_payment_invoices]
@@ -438,9 +451,11 @@ def append_down_payment_invoice_to_final_invoice(doc):
 
 	doc.set("custom_down_payments", [])
 	for row in down_payment_invoices:
-		dpi_doc = frappe.get_doc("Down Payment Invoice", row.name)
-		net_total = get_down_payment_net_total(dpi_doc)
-		tax_amount = flt(flt(row.down_payment_amount) - net_total, dpi_doc.precision("down_payment_amount"))
+		net_total = flt(row.net_total)
+		tax_amount = flt(
+			row.total_taxes_and_charges,
+			frappe.get_precision("Down Payment Invoice", "total_taxes_and_charges"),
+		)
 		doc.append(
 			"custom_down_payments",
 			{
@@ -449,7 +464,7 @@ def append_down_payment_invoice_to_final_invoice(doc):
 				"payment_date": first_payment_date_by_dpi.get(row.name) or first_so_payment_date,
 				"net_total": net_total,
 				"tax_amount": tax_amount,
-				"grand_total": row.down_payment_amount,
+				"grand_total": row.grand_total,
 			},
 		)
 

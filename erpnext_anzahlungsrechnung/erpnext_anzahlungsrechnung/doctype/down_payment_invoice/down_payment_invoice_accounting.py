@@ -11,10 +11,8 @@ from frappe.query_builder import DocType
 from frappe.query_builder.functions import Coalesce, Sum
 from frappe.utils import flt
 
-from erpnext_anzahlungsrechnung.erpnext_anzahlungsrechnung.doctype.down_payment_invoice.down_payment_tax_allocation import (
-	build_tax_rows_for_down_payment,
-)
 from erpnext_anzahlungsrechnung.scripts.utils import (
+	aggregate_income_by_account,
 	append_je_row,
 	default_cost_center,
 	get_company_down_payment_map,
@@ -33,64 +31,18 @@ JE_TITLE_FINAL_INVOICE_DPI_NEUTRALIZATION = "Final Invoice Down Payment Neutrali
 
 
 def get_income_tax_totals_for_down_payment_invoice(dpi):
-	"""Net per income account and tax per tax account for this down payment (aligned with print tax rows)."""
-	so = frappe.get_cached_doc("Sales Order", dpi.sales_order)
-	rows = build_tax_rows_for_down_payment(so, flt(dpi.down_payment_amount))
-	G = flt(so.grand_total)
-	D = flt(dpi.down_payment_amount)
-	income_totals = defaultdict(float)
-	income_cc = {}
-	income_proj = {}
-	if not D or not G:
-		return income_totals, defaultdict(float), income_cc, income_proj, {}
-
-	factor = D / G
-	for item in so.get("items") or []:
-		acc = getattr(item, "income_account", None)
-		if not acc:
-			continue
-		amt = flt(flt(item.net_amount) * factor, item.precision("net_amount"))
-		if amt:
-			income_totals[acc] += amt
-			income_cc.setdefault(acc, item.cost_center)
-			income_proj.setdefault(acc, item.project or so.project)
-
-	target_net = sum(flt(r["net_amount"]) for r in rows)
-	cur_net = sum(income_totals.values())
-	diff = flt(target_net - cur_net, frappe.get_precision("Sales Order", "net_total") or 2)
-	if abs(diff) > 0.0001 and income_totals:
-		big = max(income_totals.keys(), key=lambda k: income_totals[k])
-		income_totals[big] += diff
-
-	dp_map = get_company_down_payment_map(dpi.company)
+	"""Net per income account and tax per tax account for this down payment, read straight off
+	its own ``items`` / ``taxes`` tables."""
+	income_totals, income_cc, income_proj = aggregate_income_by_account(dpi)
 	tax_totals = defaultdict(float)
 	tax_cc = {}
-	for r in rows:
-		rate = flt(r["rate"])
-		tax_amt = flt(r["tax_amount"])
-		if not tax_amt:
-			continue
-		tax_acc = None
-		for cfg in dp_map.values():
-			if abs(flt(cfg.get("tax_rate")) - rate) <= 0.011:
-				tax_acc = cfg.get("tax_account")
-				break
-		if not tax_acc:
-			frappe.throw(_("Set Tax Account on Company Down Payment Account for tax rate {0}%.").format(rate))
-		tax_totals[tax_acc] += tax_amt
-		tax_cc.setdefault(tax_acc, default_cost_center(dpi.company))
+	for tax in dpi.get("taxes") or []:
+		amt = flt(tax.base_tax_amount_after_discount_amount)
+		if amt:
+			tax_totals[tax.account_head] += amt
+			tax_cc.setdefault(tax.account_head, tax.cost_center or default_cost_center(dpi.company))
 
 	return income_totals, tax_totals, income_cc, income_proj, tax_cc
-
-
-def get_down_payment_net_total(dpi):
-	income_totals, *_ = get_income_tax_totals_for_down_payment_invoice(dpi)
-	return flt(sum(income_totals.values()))
-
-
-def get_down_payment_tax_total(dpi):
-	_, tax_totals, *_ = get_income_tax_totals_for_down_payment_invoice(dpi)
-	return flt(sum(tax_totals.values()))
 
 
 def post_down_payment_invoice_submission_journals(dpi) -> None:
@@ -190,7 +142,7 @@ def fifo_split_sales_order_payment_to_dpis(
 	dpis = frappe.get_all(
 		"Down Payment Invoice",
 		filters={"sales_order": sales_order, "docstatus": 1},
-		fields=["name", "down_payment_amount"],
+		fields=["name", "grand_total"],
 		order_by="posting_date asc, creation asc",
 	)
 	remaining = alloc_base
@@ -199,7 +151,7 @@ def fifo_split_sales_order_payment_to_dpis(
 		if remaining <= 0:
 			break
 		dpi_name = row.name
-		gross = flt(row.down_payment_amount)
+		gross = flt(row.grand_total)
 		cleared = get_total_receipt_clearing_debit_on_requested_for_dpi(dpi_name, company)
 		capacity = flt(gross - cleared)
 		if capacity <= 0:
@@ -225,7 +177,7 @@ def build_down_payment_receipt_clearing_journal_accounts(
 	ref_name: str,
 ) -> list[dict]:
 	"""Account rows for one receipt-clearing **Journal Entry** (Step 2) for ``alloc_base`` in company currency."""
-	income_totals, _tax_totals, _icc, _ipr, _tcc = get_income_tax_totals_for_down_payment_invoice(dpi)
+	income_totals, tax_totals, _icc, _ipr, tax_cc = get_income_tax_totals_for_down_payment_invoice(dpi)
 	require_down_payment_accounts_for_income(pe.company, income_totals.keys())
 	dp_map = get_company_down_payment_map(pe.company)
 
@@ -237,14 +189,17 @@ def build_down_payment_receipt_clearing_journal_accounts(
 		return []
 
 	base_net = flt(sum(income_totals.values()))
-	base_grand = flt(dpi.down_payment_amount)
+	base_grand = flt(dpi.grand_total)
 	if not base_grand:
 		return []
 
 	net_portion = flt(alloc_base * base_net / base_grand, 2)
 	tax_pool = flt(alloc_base - net_portion, 2)
 
-	tax_amounts = aggregate_tax_amounts_for_down_payment_invoice(dpi)
+	# Reuse tax_totals/tax_cc from the get_income_tax_totals_for_down_payment_invoice() call
+	# above instead of calling aggregate_tax_amounts_for_down_payment_invoice(dpi), which would
+	# just re-derive the same numbers from the same document a second time.
+	tax_amounts = [(acc, flt(base_amt), tax_cc.get(acc)) for acc, base_amt in tax_totals.items() if base_amt]
 	tax_splits = defaultdict(float)
 	total_tax_base = sum(flt(a[1]) for a in tax_amounts)
 	if total_tax_base > 0 and tax_pool:

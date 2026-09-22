@@ -75,7 +75,7 @@ def aggregate_income_by_account(doc):
 			continue
 		income_account = (
 			item.income_account
-			if (not item.enable_deferred_revenue or doc.is_return)
+			if (not item.get("enable_deferred_revenue") or doc.is_return)
 			else item.deferred_revenue_account
 		)
 		if not income_account:

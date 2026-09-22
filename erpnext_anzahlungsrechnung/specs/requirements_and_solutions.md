@@ -111,30 +111,34 @@ How we solve it technically:
 - We provide the example (as above) in our jinja template
 
 
-## Proportional tax on down payments
+## Items and taxes on the Down Payment Invoice
 
-**Down Payment Invoice** does not maintain its own `taxes` child table. Tax buckets come from the **Sales Order** document’s `item_wise_tax_details` (same logic as item-wise tax on the order or invoice).
-The *Down Payment Amount* (`down_payment_amount`) is split across those buckets in proportion to each bucket’s taxable (net) base on the source document. From each share we derive net, rate label, and tax for that rate.
+**Down Payment Invoice** maintains its own `items` (`Down Payment Invoice Item`) and `taxes`
+(`Sales Taxes and Charges`) child tables, calculated the same way a **Sales Invoice** calculates
+its own totals (`net_total`, `total_taxes_and_charges`, `grand_total`). Nothing is derived from the
+**Sales Order** at read time any more: creating a Down Payment Invoice from a Sales Order groups the
+order's items by `(income_account, item_tax_template)` and writes one item row per group at the
+requested percentage of that group's net; the tax rows are copied verbatim from the Sales Order's
+own `taxes` table and scale themselves to the smaller net automatically. Tax buckets for print and
+for the Journal Entry automation are read straight off the Down Payment Invoice's own
+`item_wise_tax_details` (populated for free once that field exists on the document, the same
+mechanism the Sales Order itself uses).
 
 Print format (per down payment):
 
-1. The first item row puts *Position Name* (`position_name`), a line break, then *Position Description* (`position_description`) in the *Description* cell, with the first tax bucket’s *Tax Rate*, *Net Amount*, and *Tax* on the same table row. Further buckets (if any) follow on their own rows with an empty *Description* cell.
+1. Each item row shows that item's own *Description*, *Tax Rate*, *Net Amount*, and *Tax* — a
+   natural one-row-per-item table body.
 
 ### Example
 
-- Source totals 12.900
-  - 10.000 net at "19%"
-  - 1.000 net at "0%"
-- A 20% down payment is 2.580 gross. Allocation:
-  - 2.000 net at "19%" (tax 380)
-  - 200 net at "0%" (tax 0).
-- Result: The printout shows one row: *Position Name* / *Position Description* (stacked in one cell) with first bucket *Tax Rate* "19%" and net 2.000; next row: "0%" and net 200.
+- Sales Order: 10.000 net at "19%", 1.000 net at "0%".
+- A 20% down payment groups into two item rows: 2.000 net at "19%" (tax 380), 200 net at "0%"
+  (tax 0).
+- Result: The printout shows one row per item — "19%" with net 2.000, then "0%" with net 200.
 
-The item table uses *Description*, *Tax Rate*, *Net Amount*, and *Tax* (no serial column). The footer shows *Net Total*, one line per bucket with the **Sales Order** `taxes` row *Description* (`description`) when resolved from `item_wise_tax_details` / rate matching (otherwise a short fallback) and the scaled *Tax* amount, then *Grand Total* (*Down Payment Amount*).
-
-```
-
-```
+The item table uses *Description*, *Tax Rate*, *Net Amount*, and *Tax* (no serial column). The
+footer shows *Net Total*, one line per tax rate with the tax row's own *Description* and its
+*Tax* amount, then *Grand Total*.
 
 ## Supporting Features
 
